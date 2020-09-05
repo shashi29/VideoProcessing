@@ -21,6 +21,10 @@ from google.cloud.speech import types
 import threading
 import time
 
+#Tesseract
+import pytesseract
+
+
 #http://sebastiandahlgren.se/2014/06/27/running-a-method-as-a-background-thread-in-python/
 class StartVideo(object):
     """ Threading example class
@@ -59,31 +63,25 @@ class StartVideo(object):
         #print(filtered_word_dict)
         return word_count.most_common(10),filtered_word_dict
 
+    def extract_text_frame(self,img):
+        #Crop the bottom part
+        #run tesseract on top of that
+        print("I am here")
+        custom_config = r'--oem 3 --psm 6'
+        try:
+            print(pytesseract.image_to_string(img, config=custom_config))
+        except Exception as ex:
+            print(ex)
+
     def PlayVideo(self): 
         video=cv2.VideoCapture(self.video_path)
         player = MediaPlayer(self.video_path)
-        fileText = open(self.subtitle_path,"r+")
-        sentences = sent_tokenize(fileText.read())
-        sen_len = len(sentences)
-        counter = 0
-        while True and sen_len > 0:
+
+        while True:
             grabbed, frame=video.read()
             audio_frame, val = player.get_frame()
             
-            counter = counter + 1
-            if counter % 200 == 0:
-                sen_len = sen_len - 1
-                #content = sentences[counter//200]
-                content = ''
-    
-            word_count,word_count1 = processTextFixed(sentences,counter//200)
-            #print(word_count)
-            for indx,(key,value) in enumerate(word_count):
-                content = key + ' ' + str(value) 
-                indx = indx + 1
-                frame = cv2.putText(frame, content, (400,indx*30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2, cv2.LINE_AA)
-                #cv2.imshow("newWindows", frame)
-                #Write content on frame
+            self.extract_text_frame(frame)
             with open('temp1.txt') as fp1: 
                 data = fp1.read() 
               
@@ -195,12 +193,12 @@ def google_streaming_stt(filename: str, lang: str, encoding: str):
             transcript = result.alternatives[0].transcript
             if result.is_final:
                 file_object = open('temp1.txt','a+')
-                print(transcript)
+                #print(transcript)
                 file_object.write(transcript)
                 file_object.close()
             else:
                 file_object = open('temp2.txt','w')
-                print(transcript)
+                #print(transcript)
                 file_object.write(transcript)
                 file_object.close()
         except Exception as ex:
@@ -235,10 +233,10 @@ def processTextFixed(sentences, stopIndex):
 
 if __name__ == "__main__":
     
-    video_path = "D:\Extra\Demo\index1.mp4"
-    audio_path = "D:\Extra\Demo\\audio.wav"
+    video_path = "1.mp4"
+    audio_path = "audio.wav"
     encoding = 'LINEAR16'
-    lang ='en-US'
+    lang ='hi-IN'
     subtitle_path = "subtitle.txt"
     #Extract audio from video using ffmpeg
     
@@ -251,7 +249,7 @@ if __name__ == "__main__":
     file = open('temp2.txt','w')
     file.close()
     time.sleep(5)
-    runVideo = StartVideo(video_path, subtitle_path)
+    runVideo = StartVideo(video_path)
     google_streaming_stt(audio_path, lang, encoding)
 
     
