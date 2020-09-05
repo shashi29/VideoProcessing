@@ -244,12 +244,12 @@ if __name__ == "__main__":
     command = f"ffmpeg -i {video_path} -acodec pcm_s16le -ac 1 {audio_path}"
     os.system(command)
     #Clear the previous temp data
-    file = open('temp1.txt','w')
-    file.close()
-    file = open('temp2.txt','w')
-    file.close()
+    #file = open('temp1.txt','w')
+    #file.close()
+    #file = open('temp2.txt','w')
+    #file.close()
     time.sleep(5)
     runVideo = StartVideo(video_path)
-    google_streaming_stt(audio_path, lang, encoding)
+    #google_streaming_stt(audio_path, lang, encoding)
 
     
