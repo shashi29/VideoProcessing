@@ -1,6 +1,6 @@
 import pytube
 import os
-#from google.cloud import storage
+from google.cloud import storage
 import json
 import io
 from google.cloud import speech_v1
@@ -24,7 +24,7 @@ def download_video(link):
     
     # rename the path
     new_path = video_path.split('/')
-    new_filename = f"video6.mp4"
+    new_filename = f"video.mp4"
     new_path[-1]= new_filename
     new_path='/'.join(new_path)
     os.rename(video_path, new_path)
@@ -41,14 +41,33 @@ def video_info(video_filepath):
 
     return channels, bit_rate, sample_rate
 
+def upload_blob(bucket_name, source_file_name, destination_blob_name):
+    """Uploads a file to the bucket."""
+    # bucket_name = "your-bucket-name"
+    # source_file_name = "local/path/to/file"
+    destination_blob_name = "audio.wav"
+
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name)
+
+    blob.upload_from_filename(source_file_name)
+
+    print(
+        "File {} uploaded to {}.".format(
+            source_file_name, destination_blob_name
+        )
+    )
+
 def video_to_audio(video_filepath, audio_filename, video_channels, video_bit_rate, video_sample_rate):
     command = f"ffmpeg -i {video_filepath} -b:a {video_bit_rate} -ac {video_channels} -ar {video_sample_rate} -vn {audio_filename}"
     #subprocess.call(command, shell=True)
     os.system(command)
 
-    #blob_name = f"audios/{audio_filename}"
-    #upload_blob(BUCKET_NAME, audio_filename, blob_name)
-    #return blob_name    
+    blob_name = f"audios/{audio_filename}"
+    BUCKET_NAME = "audio_2020"
+    upload_blob(BUCKET_NAME, audio_filename, blob_name)
+    return blob_name    
 
 def long_running_recognize(storage_uri, channels, sample_rate):
     
@@ -134,3 +153,60 @@ def subtitle_generation(speech_to_text_response, bin_size=3):
     # turn transcription list into subtitles
     subtitles = srt.compose(transcriptions)
     return subtitles
+
+#Paramters for the audio
+chunk = 1024  
+
+# Define a function to normalize a chunk to a target amplitude.
+def match_target_amplitude(aChunk, target_dBFS):
+    ''' Normalize given audio chunk '''
+    change_in_dBFS = target_dBFS - aChunk.dBFS
+    return aChunk.apply_gain(change_in_dBFS)
+
+
+def create_audio_chunks(sound):
+    chunks = split_on_silence(sound,
+        # experiment with this value for your target audio file
+        min_silence_len = 500,
+        # adjust this per requirement
+        silence_thresh = sound.dBFS-14,
+        # keep the silence for 1 second, adjustable as well
+        keep_silence=500,
+    )
+    folder_name = "audio-chunks"
+    # create a directory to store the audio chunks
+    if not os.path.isdir(folder_name):
+        os.mkdir(folder_name)
+    whole_text = ""
+    # process each chunk 
+    for i, audio_chunk in enumerate(chunks, start=1):
+        # export audio chunk and save it in
+        # the `folder_name` directory.
+        chunk_filename = os.path.join(folder_name, f"chunk{i}.wav")
+        audio_chunk.export(chunk_filename, format="wav")
+
+
+def playAudio(audio):
+    #Unable to install pyaudio 
+    f = wave.open(audio,"rb")  
+    #instantiate PyAudio  
+    p = pyaudio.PyAudio()  
+    #open stream  
+    stream = p.open(format = p.get_format_from_width(f.getsampwidth()),  
+                    channels = f.getnchannels(),  
+                    rate = f.getframerate(),  
+                    output = True)  
+    #read data  
+    data = f.readframes(chunk)  
+
+    #play stream  
+    while data:  
+        stream.write(data)  
+        data = f.readframes(chunk)  
+
+    #stop stream  
+    stream.stop_stream()  
+    stream.close()  
+
+    #close PyAudio  
+    p.terminate()

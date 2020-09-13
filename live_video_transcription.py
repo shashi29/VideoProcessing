@@ -240,7 +240,6 @@ if __name__ == "__main__":
     subtitle_path = "subtitle.txt"
     #Extract audio from video using ffmpeg
     
-    #!
     command = f"ffmpeg -i {video_path} -acodec pcm_s16le -ac 1 {audio_path}"
     os.system(command)
     #Clear the previous temp data
