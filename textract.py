@@ -30,6 +30,8 @@ from src.recognizer import Recognizer
 import os
 import sys
 import cv2
+from google.cloud import vision
+import io
 
 #Image comparision
 from skimage import measure
@@ -69,11 +71,6 @@ def extract_text_frame(img):
     #run tesseract on top of that
     height, width, channel = img.shape
     img = img[int(6/8*height):height,0:width]
-    #lower = np.array([0,0,205])
-    #upper = np.array([179,255,255])
-    #hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    #mask = cv2.inRange(hsv, lower, upper)
-    #res = cv2.bitwise_and(img,img, mask= mask)
     cv2.imwrite("temp.jpg",img)
     custom_config = r'--oem 3 --psm 6'
     #text = pytesseract.image_to_data(img, config=custom_config)
@@ -98,12 +95,15 @@ def extract_text(img, detector, recognizer):
 #https://jdhao.github.io/2019/07/06/python_opencv_pil_image_to_bytes/
 def detect_text_googleVisonApi(path):
     """Detects text in the file."""
-    from google.cloud import vision
-    import io
+    
+    #Read mask word list file
+    with open('mask_word.txt') as fp1: 
+        mask_word = fp1.read() 
+    
+        
+    mask_word = mask_word.split("\n")
     client = vision.ImageAnnotatorClient()
 
-    #with io.open(path, 'rb') as image_file:
-    #    content = image_file.read()
     is_success, im_buf_arr = cv2.imencode(".jpg", path)
     content = im_buf_arr.tobytes()
 
@@ -111,21 +111,28 @@ def detect_text_googleVisonApi(path):
 
     response = client.text_detection(image=image)
     texts = response.text_annotations
+    file = open('temp2.txt','w')
 
     for text in texts:
-        print('\n"{}"'.format(text.description))
+        if text.description in mask_word:            
 
-        vertices = (['({},{})'.format(vertex.x, vertex.y)
-                    for vertex in text.bounding_poly.vertices])
+            #print('\n"{}"'.format(text.description))            
+            #vertices = (['[{},{}]'.format(vertex.x, vertex.y)
+            #            for vertex in text.bounding_poly.vertices])
+            x_list = list()
+            y_list = list()
+            for vertex in text.bounding_poly.vertices:
+                x_list.append(vertex.x)
+                y_list.append(vertex.y)
+            xmin = min(x_list)
+            ymin = min(y_list)
+            xmax = max(x_list)
+            ymax = max(y_list)
+            
+            file.write(f'{xmin} {ymin} {xmax} {ymax}\n')
 
-        print('bounds: {}'.format(','.join(vertices)))
-
-    if response.error.message:
-        raise Exception(
-            '{}\nFor more info on error messages, check: '
-            'https://cloud.google.com/apis/design/errors'.format(
-                response.error.message))
-
+    file.close()
+    fp1.close()
 
 def processText(sentences):
     stop_words = set(stopwords.words('english'))
@@ -151,22 +158,14 @@ def processText(sentences):
 #On the basis of that we will chage these
 #https://www.geeksforgeeks.org/text-detection-and-extraction-using-opencv-and-ocr/
 def bb_intersection_over_union(boxA, boxB):
-	# determine the (x, y)-coordinates of the intersection rectangle
 	xA = max(boxA[0], boxB[0])
 	yA = max(boxA[1], boxB[1])
 	xB = min(boxA[2], boxB[2])
 	yB = min(boxA[3], boxB[3])
-	# compute the area of intersection rectangle
 	interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
-	# compute the area of both the prediction and ground-truth
-	# rectangles
 	boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
 	boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
-	# compute the intersection over union by taking the intersection
-	# area and dividing it by the sum of prediction + ground-truth
-	# areas - the interesection area
 	iou = interArea / float(boxAArea + boxBArea - interArea)
-	# return the intersection over union value
 	return iou
 
 def find_text_region_crop(img):    
@@ -198,27 +197,23 @@ def PlayVideo(video_path, detector, recognizer):
         height, width, channel = frame.shape
         img = frame[int(6/8*height):height,0:width]
         
-        try:
-            if len(crop_list) > 2:
-                prev_img = crop_list[-1]
-                boxA,crop_img = find_text_region_crop(img)
-                boxB,_ = find_text_region_crop(prev_img)
-                iou = bb_intersection_over_union(boxA, boxB)
-                if iou < 1.0:
-                    #cv2.imshow("prev_img", prev_img)
-                    #cv2.imshow("current_img",img)
-                    #cv2.destroyAllWindows()
-                    #th = threading.Thread(target=extract_text, args=(img, detector, recognizer,))
-                    #th = threading.Thread(target=extract_text_frame, args=(crop_img,))
-                    
-                    th = threading.Thread(target=detect_text_googleVisonApi, args=(crop_img,))
-                    th.daemon = True
-                    th.start()
-                    
-            crop_list.append(img)
-        except Exception as ex:
-            crop_list.append(img)
-            continue
+        if len(crop_list) > 2:
+            prev_img = crop_list[-1]
+            boxA,crop_img = find_text_region_crop(img)
+            boxB,_ = find_text_region_crop(prev_img)
+            iou = bb_intersection_over_union(boxA, boxB)
+            if iou < 1.0:
+                #cv2.imshow("prev_img", prev_img)
+                #cv2.imshow("current_img",img)
+                #cv2.destroyAllWindows()
+                #th = threading.Thread(target=extract_text, args=(img, detector, recognizer,))
+                #th = threading.Thread(target=extract_text_frame, args=(crop_img,))
+                
+                th = threading.Thread(target=detect_text_googleVisonApi, args=(img,))
+                th.daemon = True
+                th.start()
+                
+        crop_list.append(img)
 
         with open('temp1.txt') as fp1: 
             data = fp1.read() 
@@ -229,6 +224,22 @@ def PlayVideo(video_path, detector, recognizer):
             indx = indx + 1
             frame = cv2.putText(frame, content, (50,indx*30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2, cv2.LINE_AA)
  
+
+
+        #Now read the content of file and mask the word
+        with open('temp2.txt') as fp1: 
+            mask_word_box = fp1.read() 
+        
+        mask_word_box = mask_word_box.split("\n")
+        mask_word_box.pop()
+        if len(mask_word_box) > 0:
+            for bb_mask in mask_word_box:
+                bb_mask = bb_mask.split(" ")
+                print(bb_mask)
+                #bb_mask = list(map(int, bb_mask))
+    
+                cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+int(6/8*height)),(int(bb_mask[2]),int(bb_mask[3])+int(6/8*height)),(0,0,255),-1)
+
 
         if not grabbed:
             print("End of video")
@@ -260,6 +271,16 @@ if __name__ == "__main__":
     subtitle_path = "subtitle.txt"
     file = open('temp1.txt','w')
     file.close()
+    file = open('temp2.txt','w')
+    file.close()
     #Extract audio from video using ffmpeg
     runVideo = PlayVideo(video_path, detector, recognizer)
+    
+with open('temp2.txt') as fp1: 
+    mask_word_box = fp1.read() 
+
+mask_word_box = mask_word_box.split("\n")
+for bb_mask in mask_word_box:
+    bb_mask = bb_mask.split(" ")
+    print(bb_mask)
     
