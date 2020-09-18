@@ -151,9 +151,9 @@ if __name__ == '__main__':
   img_a = 'temp.jpg'
   img_b = 'prev.jpg'
   # get the similarity values
-  #structural_sim = structural_sim(img_a, img_b)
-  #pixel_sim = pixel_sim(img_a, img_b)
+  structural_sim = structural_sim(img_a, img_b)
+  pixel_sim = pixel_sim(img_a, img_b)
   sift_sim = sift_sim(img_a, img_b)
-  #emd = earth_movers_distance(img_a, img_b)
-  #print(structural_sim, pixel_sim, sift_sim, emd)
-  print(sift_sim)
+  emd = earth_movers_distance(img_a, img_b)
+  print(structural_sim, pixel_sim, sift_sim, emd)
+  #print(sift_sim)

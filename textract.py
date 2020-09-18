@@ -40,32 +40,6 @@ from measure_img_similarity import *
 #http://sebastiandahlgren.se/2014/06/27/running-a-method-as-a-background-thread-in-python/
 #https://gist.github.com/sebdah/832219525541e059aefa
 
-def sift_sim(img_a, img_b):
-  '''
-  Use SIFT features to measure image similarity
-  @args:
-    {str} path_a: the path to an image file
-    {str} path_b: the path to an image file
-  @returns:
-    TODO
-  '''
-  # initialize the sift feature detector
-  orb = cv2.ORB_create()
-
-  # find the keypoints and descriptors with SIFT
-  kp_a, desc_a = orb.detectAndCompute(img_a, None)
-  kp_b, desc_b = orb.detectAndCompute(img_b, None)
-
-  # initialize the bruteforce matcher
-  bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-
-  # match.distance is a float between {0:100} - lower means more similar
-  matches = bf.match(desc_a, desc_b)
-  similar_regions = [i for i in matches if i.distance < 70]
-  if len(matches) == 0:
-    return 0
-  return len(similar_regions) / len(matches)
-
 def extract_text_frame(img):
     #Crop the bottom part
     #run tesseract on top of that
@@ -90,7 +64,8 @@ def extract_text(img, detector, recognizer):
         text = text + ' '
         file_object.write(text)
     file_object.close()        
- 
+
+
 #Convert numpy image to the io format       
 #https://jdhao.github.io/2019/07/06/python_opencv_pil_image_to_bytes/
 def detect_text_googleVisonApi(path):
@@ -168,7 +143,7 @@ def bb_intersection_over_union(boxA, boxB):
 	iou = interArea / float(boxAArea + boxBArea - interArea)
 	return iou
 
-def find_text_region_crop(img):    
+def find_text_region_crop(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) 
     ret, thresh1 = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV) 
     rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (18, 18)) 
@@ -181,10 +156,9 @@ def find_text_region_crop(img):
     cnt=contours[max_index]
     x,y,w,h = cv2.boundingRect(cnt)
     crop_img = img[y:y+h,x:x+w]
-    
     return [x,y,x+w,y+h],crop_img
 
-def PlayVideo(video_path, detector, recognizer): 
+def PlayVideo(video_path, detector=None, recognizer=None): 
     video=cv2.VideoCapture(video_path)
     player = MediaPlayer(video_path)
     count = 0
@@ -193,27 +167,42 @@ def PlayVideo(video_path, detector, recognizer):
         count = count + 1
         grabbed, frame=video.read()
         audio_frame, val = player.get_frame()
+        if not grabbed:
+            print("End of video")
+            break
         
         height, width, channel = frame.shape
-        img = frame[int(6/8*height):height,0:width]
+        lower_height = int(8/10*height)
+        img = frame[lower_height:height,0:width]
         
-        if len(crop_list) > 2:
-            prev_img = crop_list[-1]
-            boxA,crop_img = find_text_region_crop(img)
-            boxB,_ = find_text_region_crop(prev_img)
+        #if count == 0:
+            #First frame
+            #detect_text_googleVisonApi(img)
+            
+        if len(crop_list) > 1:
+            
+            prev_frame = crop_list[-1]
+            prev_img = prev_frame[lower_height:height,0:width]
+            boxA, crop_imgA = find_text_region_crop(img)
+            boxB, crop_imgB = find_text_region_crop(prev_img)            
             iou = bb_intersection_over_union(boxA, boxB)
-            if iou < 1.0:
-                #cv2.imshow("prev_img", prev_img)
-                #cv2.imshow("current_img",img)
+            if iou < 0.99:
+                #cv2.imshow("prev_img", crop_imgB)
+                #cv2.imshow("current_img", crop_imgA)
+                #th = threading.Thread(target = detect_text_googleVisonApiV2, args=(img, prev_img, ))
+                #th.daemon = True
+                #th.start()
+                 
+                #Plan run google vision api on both the images
+                #If content is same , then clean 
                 #cv2.destroyAllWindows()
                 #th = threading.Thread(target=extract_text, args=(img, detector, recognizer,))
-                #th = threading.Thread(target=extract_text_frame, args=(crop_img,))
-                
-                th = threading.Thread(target=detect_text_googleVisonApi, args=(img,))
-                th.daemon = True
-                th.start()
-                
-        crop_list.append(img)
+                #th = threading.Thread(target=extract_text_frame, args=(crop_img,))                
+                #th = threading.Thread(target=detect_text_googleVisonApi, args=(img,))
+                #th.daemon = True
+                #th.start()
+
+        crop_list.append(frame)
 
         with open('temp1.txt') as fp1: 
             data = fp1.read() 
@@ -224,8 +213,6 @@ def PlayVideo(video_path, detector, recognizer):
             indx = indx + 1
             frame = cv2.putText(frame, content, (50,indx*30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2, cv2.LINE_AA)
  
-
-
         #Now read the content of file and mask the word
         with open('temp2.txt') as fp1: 
             mask_word_box = fp1.read() 
@@ -235,34 +222,25 @@ def PlayVideo(video_path, detector, recognizer):
         if len(mask_word_box) > 0:
             for bb_mask in mask_word_box:
                 bb_mask = bb_mask.split(" ")
-                print(bb_mask)
-                #bb_mask = list(map(int, bb_mask))
-    
-                cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+int(6/8*height)),(int(bb_mask[2]),int(bb_mask[3])+int(6/8*height)),(0,0,255),-1)
+                cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+lower_height),(int(bb_mask[2]),int(bb_mask[3])+lower_height),(0,0,255),-1)
 
 
-        if not grabbed:
-            print("End of video")
-            break
         if cv2.waitKey(30) & 0xFF == ord("q"):
             break
-        cv2.imshow("Video", frame)
-        if val != 'eof' and audio_frame is not None:
-            #audio
-            img, t = audio_frame
-
-        
+        if count > 1:
+            cv2.imshow("Video", crop_list[-1])
+            
     video.release()
     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
 
-    detector = Detector()
-    detector.load()
+    #detector = Detector()
+    #detector.load()
     
-    recognizer = Recognizer()
-    recognizer.load()    
+    #recognizer = Recognizer()
+    #recognizer.load()    
 
     video_path = "5.mp4"
     audio_path = "audio.wav"
@@ -274,13 +252,5 @@ if __name__ == "__main__":
     file = open('temp2.txt','w')
     file.close()
     #Extract audio from video using ffmpeg
-    runVideo = PlayVideo(video_path, detector, recognizer)
-    
-with open('temp2.txt') as fp1: 
-    mask_word_box = fp1.read() 
-
-mask_word_box = mask_word_box.split("\n")
-for bb_mask in mask_word_box:
-    bb_mask = bb_mask.split(" ")
-    print(bb_mask)
-    
+    runVideo = PlayVideo(video_path)
+        
