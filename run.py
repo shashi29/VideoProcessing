@@ -1,9 +1,3 @@
-"""
-Created on Fri Sep 18 23:02:57 2020
-
-@author: shashi.raj
-"""
-
 import cv2
 import numpy as np
 import sys
