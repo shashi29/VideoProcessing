@@ -32,8 +32,26 @@ from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 import math
 import time
+import copy
 
 from utility import *
+import math
+import wave
+import struct
+import numpy as np
+import pandas as pd
+
+from playsound import playsound
+
+from pydub import AudioSegment
+from pydub.playback import play
+import numpy as np
+from scipy.io import wavfile
+from plotly.offline import init_notebook_mode
+import plotly.graph_objs as go
+import plotly
+#Read from pickel file info
+import pickle
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="credentials.json"
 
@@ -130,14 +148,12 @@ def extract_mask_bbox_info(video_path):
 
 def playVideo(video_path):
     video=cv2.VideoCapture(video_path)
-    player = MediaPlayer(video_path)
     count = -1
     previous_processed_frames = list()
     previous_processed_frames.append(0)     #Hack for first frame
     while (video.isOpened()):
         count = count + 1
         grabbed, frame=video.read()
-        audio_frame, val = player.get_frame()
         if not grabbed:
             print("[INFO] End of video")
             break
@@ -175,7 +191,7 @@ def playVideo(video_path):
                         cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+Offset),(int(bb_mask[2]),int(bb_mask[3])+Offset),(0,0,255),-1)
             fp1.close()
 
-        if cv2.waitKey(20) & 0xFF == ord("q"):
+        if cv2.waitKey(30) & 0xFF == ord("q"):
             break
 
         cv2.imshow("Video", frame)
@@ -190,29 +206,31 @@ def word_timestamp(response):
     word_end_nano_sec_list = list()
     word_start_time_list = list()
     word_end_time_list = list()
-    
-    with open('mask_word.txt') as fp1: 
-        mask_word = fp1.read() 
-    fp1.close()
-    bad_word = mask_word.split("\n")
+
     for result in response.results:
         for i in range(len(result.alternatives[0].words) - 1):
             word = result.alternatives[0].words[i].word
-            if word in bad_word:
-                word_start_sec = result.alternatives[0].words[i].start_time.seconds
-                word_end_sec = result.alternatives[0].words[i].end_time.seconds
-                word_start_nano_sec = result.alternatives[0].words[i].start_time.nanos
-                word_end_nano_sec = result.alternatives[0].words[i].end_time.nanos
-                word_start_time = word_start_sec * pow(10,9) + word_start_nano_sec
-                word_end_time = word_end_sec * pow(10,9) + word_end_nano_sec
-                word_list.append(word)
-                word_start_sec_list.append(word_start_sec)
-                word_start_nano_sec_list.append(word_start_nano_sec)
-                word_end_sec_list.append(word_end_sec)
-                word_end_nano_sec_list.append(word_end_nano_sec)
-                word_start_time_list.append(word_start_time)
-                word_end_time_list.append(word_end_time)
+            #if word in bad_word:
+            word_start_sec = result.alternatives[0].words[i].start_time.seconds
+            word_end_sec = result.alternatives[0].words[i].end_time.seconds
+            word_start_nano_sec = result.alternatives[0].words[i].start_time.nanos
+            word_end_nano_sec = result.alternatives[0].words[i].end_time.nanos
+            word_start_time = word_start_sec * pow(10,3) + word_start_nano_sec * pow(10,-6)
+            word_end_time = word_end_sec * pow(10,3) + word_end_nano_sec * pow(10,-6)
+            word_list.append(word)
+            word_start_sec_list.append(word_start_sec)
+            word_start_nano_sec_list.append(word_start_nano_sec)
+            word_end_sec_list.append(word_end_sec)
+            word_end_nano_sec_list.append(word_end_nano_sec)
+            word_start_time_list.append(word_start_time)
+            word_end_time_list.append(word_end_time)
 
+    #Make starting point to zer0
+    word_start_time_lag = copy.deepcopy(word_start_time_list)
+    del word_start_time_lag[0]
+    word_start_time_lag.append(-1)
+    word_start_time_list[0] = 0
+    
     df = pd.DataFrame()
     df['word'] = word_list
     df['word_start_sec'] = word_start_sec_list 
@@ -220,33 +238,52 @@ def word_timestamp(response):
     df['word_end_sec'] = word_end_sec_list
     df['word_end_nano_sec'] = word_end_nano_sec_list
     df['word_start_time'] = word_start_time_list
-    df['word_end_time'] = word_end_time_list 
-    return df, word_start_time_list, word_start_sec_list
+    df['word_end_time'] = word_end_time_list
+    df['word_start_time_lag'] = word_start_time_lag
 
-def mute_audio():
-    devices = AudioUtilities.GetSpeakers()
-    interface = devices.Activate(
-    IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    volume = cast(interface, POINTER(IAudioEndpointVolume))
-    currentVolumeDb = volume.GetMasterVolumeLevel()
-    volume.SetMasterVolumeLevel(currentVolumeDb - 30.0, None)
+    return df    
 
-def unmute_audio():
-    devices = AudioUtilities.GetSpeakers()
-    interface = devices.Activate(
-    IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    volume = cast(interface, POINTER(IAudioEndpointVolume))
-    currentVolumeDb = volume.GetMasterVolumeLevel()
-    volume.SetMasterVolumeLevel(0.0, None)
+def create_mask_audio(word_duration, beep_audio):
+    if len(beep_audio) >= word_duration:
+        return beep_audio[:word_duration]
+    else:
+        new_beep_audio = beep_audio * (int(word_duration//len(beep_audio))+1)
+        return new_beep_audio[:word_duration]
     
+def process_audio(audio_path, beep_path, df):
+    audio = AudioSegment.from_wav(audio_path)
+    beep_audio = AudioSegment.from_wav(beep_path)
+    with open('mask_word.txt') as fp1: 
+        mask_word = fp1.read() 
+
+    bad_word = mask_word.split("\n")
+    mask_audio = AudioSegment.empty()
+    for index, row in df.iterrows():
+        try:
+            word = row['word']
+            word_start_time = row['word_start_time']
+            word_end_time = row['word_start_time_lag']
+            word_duration = word_end_time - word_start_time
+            if word in bad_word:
+                mask_audio_word = create_mask_audio(word_duration,beep_audio) 
+                mask_audio += mask_audio_word
+            else:
+                mask_audio += audio[word_start_time:word_end_time]
+    
+        except Exception as ex:
+            print(f"[ERROR] {ex}")
+            continue
+        
+    return mask_audio
 
 if __name__ == "__main__":
 
     video_path = "5.mp4"
     audio_path = "audio.wav"
+    beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"
 
-    #os.remove(audio_path)        
+    os.remove(audio_path)        
     #Remove intermediate files
     for temp_files in glob.glob("intermediate/*"):
         os.remove(temp_files)
@@ -264,29 +301,38 @@ if __name__ == "__main__":
     gcs_uri = f"gs://{BUCKET_NAME}/{audio_path}"
     response = long_running_recognize(gcs_uri, channels, sample_rate)
     
-    #Read from pickel file info
-    import pickle
+
     with open('entry.pickle', 'wb') as f:
         pickle.dump(response, f)
     response = pickle.load(open( "entry.pickle", "rb" ))
     
-    df, word_start_time_list, word_start_sec_list = word_timestamp(response)
-    #Now start the live vide with the thread
-    unmute_audio()
+    response_df = word_timestamp(response)
+    
+    #mask audio
+    mask_audio = process_audio(audio_path, beep_path, response_df)
+    print(mask_audio)
+    mask_audio.export("final.wav", format="wav")
+
     print("[INFO] Starting video")
     startDemo = threading.Thread(target = playVideo, args=(video_path, ))
     startDemo.daemon = True
     startDemo.start()
-    time_stamp_word = len(df)
-    start_time = time.time()
-    while time_stamp_word:
-        time_dt = time.time() - start_time
-        time_dt = int(time_dt)
-        if time_dt in word_start_sec_list:
-            mute_audio()
-            time.sleep(0.10)
-            unmute_audio()
     
+    import simpleaudio as sa
+
+    # Input an existing wav file name
+    wavFile = "final.wav"
+     
+    # Play the sound if the wav file exists
+    try:
+        # Define object to play
+        w_object = sa.WaveObject.from_wave_file(wavFile)
+        # Define object to control the play
+        p_object = w_object.play()
+        print("Sound is playing...")
+        p_object.wait_done()
+        print("Finished.")
     
-    
-    
+    # Print error message if the file does not exist
+    except FileNotFoundError:
+        print("Wav File does not exists")

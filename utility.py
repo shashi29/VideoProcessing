@@ -12,6 +12,7 @@ import subprocess
 import math
 import datetime
 import srt
+import wave
 
 
 def download_video(link):
