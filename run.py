@@ -5,10 +5,12 @@ Created on Fri Sep 18 23:02:57 2020
 """
 
 import cv2
-import numpy
+import numpy as np
 import sys
 import os
 import io
+import pandas as pd
+import glob
 
 from collections import Counter 
 from ffpyplayer.player import MediaPlayer
@@ -142,11 +144,11 @@ def playVideo(video_path):
                     
         height, width, channel = frame.shape
         Offset = int(6/8*height)
-        print(f"[INFO] Frame {count}")
+        #print(f"[INFO] Frame {count}")
         file_name = f'intermediate/temp_{count}.txt'
         if os.path.isfile(file_name):
             previous_processed_frames.append(count)
-            print(f"[INFO] Processing Frames {count}")
+            #print(f"[INFO] Processing Frames {count}")
             with open(file_name) as fp1: 
                 mask_word_box = fp1.read() 
             
@@ -173,7 +175,7 @@ def playVideo(video_path):
                         cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+Offset),(int(bb_mask[2]),int(bb_mask[3])+Offset),(0,0,255),-1)
             fp1.close()
 
-        if cv2.waitKey(30) & 0xFF == ord("q"):
+        if cv2.waitKey(20) & 0xFF == ord("q"):
             break
 
         cv2.imshow("Video", frame)
@@ -181,36 +183,45 @@ def playVideo(video_path):
     cv2.destroyAllWindows()
 
 def word_timestamp(response):
-    start_time = list()
-    end_time = list()
+    word_list = list()
+    word_start_sec_list = list() 
+    word_start_nano_sec_list = list()
+    word_end_sec_list = list()
+    word_end_nano_sec_list = list()
+    word_start_time_list = list()
+    word_end_time_list = list()
+    
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
-            
+    fp1.close()
     bad_word = mask_word.split("\n")
     for result in response.results:
-        try:
-            if result.alternatives[0].words[0].start_time.seconds:
-                # bin start -> for first word of result
-                start_sec = result.alternatives[0].words[0].start_time.seconds
-                last_word_end_sec = result.alternatives[0].words[-1].end_time.seconds
-                #print("Starting and end time for sentence",start_sec,last_word_end_sec)
-        except Exception as ex:
-            print(ex)
-            
-        #We have 30 second bins now we need to iterate over each save the info
         for i in range(len(result.alternatives[0].words) - 1):
-            try:
-                word = result.alternatives[0].words[i + 1].word
-                word_start_sec = result.alternatives[0].words[i + 1].start_time.seconds
-                word_end_sec = result.alternatives[0].words[i + 1].end_time.seconds
-                if word in bad_word:
-                    print(word,word_start_sec,word_end_sec)
-                    start_time.append(word_start_sec)
-                end_time.append(word_end_sec)
-            except Exception as ex:
-                print(ex)
-    
-    return start_time, end_time
+            word = result.alternatives[0].words[i].word
+            if word in bad_word:
+                word_start_sec = result.alternatives[0].words[i].start_time.seconds
+                word_end_sec = result.alternatives[0].words[i].end_time.seconds
+                word_start_nano_sec = result.alternatives[0].words[i].start_time.nanos
+                word_end_nano_sec = result.alternatives[0].words[i].end_time.nanos
+                word_start_time = word_start_sec * pow(10,9) + word_start_nano_sec
+                word_end_time = word_end_sec * pow(10,9) + word_end_nano_sec
+                word_list.append(word)
+                word_start_sec_list.append(word_start_sec)
+                word_start_nano_sec_list.append(word_start_nano_sec)
+                word_end_sec_list.append(word_end_sec)
+                word_end_nano_sec_list.append(word_end_nano_sec)
+                word_start_time_list.append(word_start_time)
+                word_end_time_list.append(word_end_time)
+
+    df = pd.DataFrame()
+    df['word'] = word_list
+    df['word_start_sec'] = word_start_sec_list 
+    df['word_start_nano_sec'] = word_start_nano_sec_list
+    df['word_end_sec'] = word_end_sec_list
+    df['word_end_nano_sec'] = word_end_nano_sec_list
+    df['word_start_time'] = word_start_time_list
+    df['word_end_time'] = word_end_time_list 
+    return df, word_start_time_list, word_start_sec_list
 
 def mute_audio():
     devices = AudioUtilities.GetSpeakers()
@@ -218,7 +229,7 @@ def mute_audio():
     IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
     volume = cast(interface, POINTER(IAudioEndpointVolume))
     currentVolumeDb = volume.GetMasterVolumeLevel()
-    volume.SetMasterVolumeLevel(currentVolumeDb - 60.0, None)
+    volume.SetMasterVolumeLevel(currentVolumeDb - 30.0, None)
 
 def unmute_audio():
     devices = AudioUtilities.GetSpeakers()
@@ -235,10 +246,14 @@ if __name__ == "__main__":
     audio_path = "audio.wav"
     BUCKET_NAME = "audio_2020"
 
-    os.remove(audio_path)
-    #th = threading.Thread(target = extract_mask_bbox_info, args=(video_path, ))
-    #th.daemon = True
-    #th.start()
+    #os.remove(audio_path)        
+    #Remove intermediate files
+    for temp_files in glob.glob("intermediate/*"):
+        os.remove(temp_files)
+    
+    th = threading.Thread(target = extract_mask_bbox_info, args=(video_path, ))
+    th.daemon = True
+    th.start()
     print("[INFO] Find details of all mask word in video")
     file = open('intermediate/temp_0.txt','w')
     file.close()
@@ -248,23 +263,28 @@ if __name__ == "__main__":
 
     gcs_uri = f"gs://{BUCKET_NAME}/{audio_path}"
     response = long_running_recognize(gcs_uri, channels, sample_rate)
-
-    start_time, end_time = word_timestamp(response)
-
+    
+    #Read from pickel file info
+    import pickle
+    with open('entry.pickle', 'wb') as f:
+        pickle.dump(response, f)
+    response = pickle.load(open( "entry.pickle", "rb" ))
+    
+    df, word_start_time_list, word_start_sec_list = word_timestamp(response)
     #Now start the live vide with the thread
     unmute_audio()
-    st_time = time.time()
     print("[INFO] Starting video")
     startDemo = threading.Thread(target = playVideo, args=(video_path, ))
     startDemo.daemon = True
     startDemo.start()
-    
-    while True:
-        time_dt = time.time() - st_time
+    time_stamp_word = len(df)
+    start_time = time.time()
+    while time_stamp_word:
+        time_dt = time.time() - start_time
         time_dt = int(time_dt)
-        if time_dt in start_time:
+        if time_dt in word_start_sec_list:
             mute_audio()
-            time.sleep(0.5)
+            time.sleep(0.10)
             unmute_audio()
     
     
