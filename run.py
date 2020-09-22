@@ -7,7 +7,7 @@ import pandas as pd
 import glob
 
 from collections import Counter 
-from ffpyplayer.player import MediaPlayer
+#from ffpyplayer.player import MediaPlayer
 
 #Google API
 import wave
@@ -21,9 +21,6 @@ from google.cloud import vision
 import threading
 import time
 
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 import math
 import time
 import copy
@@ -41,9 +38,6 @@ from pydub import AudioSegment
 from pydub.playback import play
 import numpy as np
 from scipy.io import wavfile
-from plotly.offline import init_notebook_mode
-import plotly.graph_objs as go
-import plotly
 #Read from pickel file info
 import pickle
 
@@ -307,26 +301,3 @@ if __name__ == "__main__":
     print(mask_audio)
     mask_audio.export("final.wav", format="wav")
 
-    print("[INFO] Starting video")
-    startDemo = threading.Thread(target = playVideo, args=(video_path, ))
-    startDemo.daemon = True
-    startDemo.start()
-    
-    import simpleaudio as sa
-
-    # Input an existing wav file name
-    wavFile = "final.wav"
-     
-    # Play the sound if the wav file exists
-    try:
-        # Define object to play
-        w_object = sa.WaveObject.from_wave_file(wavFile)
-        # Define object to control the play
-        p_object = w_object.play()
-        print("Sound is playing...")
-        p_object.wait_done()
-        print("Finished.")
-    
-    # Print error message if the file does not exist
-    except FileNotFoundError:
-        print("Wav File does not exists")
