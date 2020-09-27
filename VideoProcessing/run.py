@@ -32,7 +32,6 @@ import struct
 import numpy as np
 import pandas as pd
 
-from playsound import playsound
 
 from pydub import AudioSegment
 from pydub.playback import play

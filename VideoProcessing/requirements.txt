@@ -1,0 +1,9 @@
+requests
+flask
+pandas
+google-cloud-speech==1.3.2
+google-cloud-storage==1.31.1
+google-cloud-vision==1.0.0
+pytube3
+pydub
+srt
