@@ -38,9 +38,6 @@ from pydub import AudioSegment
 from pydub.playback import play
 import numpy as np
 from scipy.io import wavfile
-from plotly.offline import init_notebook_mode
-import plotly.graph_objs as go
-import plotly
 #Read from pickel file info
 import pickle
 
