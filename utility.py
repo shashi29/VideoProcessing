@@ -46,7 +46,7 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
     """Uploads a file to the bucket."""
     # bucket_name = "your-bucket-name"
     # source_file_name = "local/path/to/file"
-    destination_blob_name = "audio.wav"
+    #destination_blob_name = "audio.wav"
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
@@ -65,7 +65,8 @@ def video_to_audio(video_filepath, audio_filename, video_channels, video_bit_rat
     #subprocess.call(command, shell=True)
     os.system(command)
 
-    blob_name = f"audios/{audio_filename}"
+    #audio_filename = os.path.basename(audio_filename)
+    blob_name = audio_filename#f"audios/{audio_filename}"
     BUCKET_NAME = "audio_2020"
     upload_blob(BUCKET_NAME, audio_filename, blob_name)
     return blob_name    
