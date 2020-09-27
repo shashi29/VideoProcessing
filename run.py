@@ -21,9 +21,6 @@ from google.cloud import vision
 import threading
 import time
 
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 import math
 import time
 import copy
