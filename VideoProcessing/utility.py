@@ -51,7 +51,7 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
-    destination_blob_name = os.path.basename(destination_blob_name)
+    #destination_blob_name = os.path.basename(destination_blob_name)
     print(destination_blob_name)
     print("-------------------------------------------------")
     print("-------------------------------------------------")

@@ -5,8 +5,8 @@ from werkzeug.utils import secure_filename
 from run import *
 from utility import *
 
-UPLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/uploads/'
-DOWNLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/downloads/'
+UPLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
+DOWNLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
 ALLOWED_EXTENSIONS = {'mp4'}
 
 app = Flask(__name__, static_url_path="/static")
@@ -58,7 +58,8 @@ def process_file(path, filename):
     process_video(path, filename)
     
 def process_video(video_path, filename):
-    
+   
+    #Delete all mp4 files and audio
     video_name = os.path.basename(video_path)
     video_name = video_name.split(".")[0]
     raw_audio_name = f'{video_name}_audio.wav'

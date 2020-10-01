@@ -239,7 +239,7 @@ def create_mask_audio(word_duration, beep_audio):
     
 def process_audio(audio_path, beep_path, df):
     audio = AudioSegment.from_wav(audio_path)
-    beep_audio = AudioSegment.from_wav(beep_path)
+    #beep_audio = AudioSegment.from_wav(beep_path)
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
 
