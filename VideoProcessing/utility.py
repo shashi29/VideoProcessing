@@ -13,6 +13,7 @@ import math
 import datetime
 import srt
 import wave
+import sys
 
 
 def download_video(link):
@@ -50,6 +51,14 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
+    destination_blob_name = os.path.basename(destination_blob_name)
+    print(destination_blob_name)
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")    
     blob = bucket.blob(destination_blob_name)
 
     blob.upload_from_filename(source_file_name)
@@ -66,7 +75,7 @@ def video_to_audio(video_filepath, audio_filename, video_channels, video_bit_rat
     os.system(command)
 
     #audio_filename = os.path.basename(audio_filename)
-    blob_name = audio_filename#f"audios/{audio_filename}"
+    blob_name = os.path.basename(audio_filename)
     BUCKET_NAME = "audio_2020"
     upload_blob(BUCKET_NAME, audio_filename, blob_name)
     return blob_name    

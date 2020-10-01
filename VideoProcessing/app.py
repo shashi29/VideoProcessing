@@ -68,12 +68,12 @@ def process_video(video_path, filename):
     processed_audio_path = os.path.join(app.config['UPLOAD_FOLDER'], processed_audio_name)
     BUCKET_NAME = "audio_2020"
     no_audio_video_path = video_path[:-4] + '_No_Audio.mp4'
-    processed_video = os.path.join(app.config['DOWNLOAD_FOLDER'],filename) #video_path[:-4] + '_Processed.mp4'
+    processed_video = os.path.join(app.config['DOWNLOAD_FOLDER'],filename)
     
     channels, bit_rate, sample_rate = video_info(video_path)
     blob_name = video_to_audio(video_path, raw_audio_path, channels, bit_rate, sample_rate)
     
-    gcs_uri = f"gs://{BUCKET_NAME}/{raw_audio_path}"
+    gcs_uri = f"gs://{BUCKET_NAME}/{raw_audio_name}"
     response = long_running_recognize(gcs_uri, channels, sample_rate)
     response_df = word_timestamp(response)
     
