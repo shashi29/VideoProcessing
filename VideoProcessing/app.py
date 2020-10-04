@@ -29,13 +29,14 @@ def index():
             return redirect(request.url)
         file = request.files['file']
         try:
-            url = request.form['url']
-            r = requests.get(url)
-            print(r.text)
-            maskText = r.text
+            maskText = request.form['text-box']
+            print(f"[INFO] {maskText}") #.text)
             maskText = maskText.split(" ")
             with open('mask_word.txt', 'w') as writer:
+                print("[INFO] writing mask word")
                 for word in maskText:
+                    print(f"[INFO] {word}")
+                    word = word + '\n'
                     writer.write(word)
             
             writer.close()
@@ -69,11 +70,15 @@ def process_video(video_path, filename):
     processed_audio_path = os.path.join(app.config['UPLOAD_FOLDER'], processed_audio_name)
     BUCKET_NAME = "audio_2020"
     no_audio_video_path = video_path[:-4] + '_No_Audio.mp4'
-    processed_video = os.path.join(app.config['DOWNLOAD_FOLDER'],filename)
+    final_video_name = video_name + "_final_result.mp4"
+    processed_video = os.path.join(app.config['DOWNLOAD_FOLDER'], final_video_name)
     
+    print("[INFO] Extracting audio output from video")
     channels, bit_rate, sample_rate = video_info(video_path)
+    print("[INFO] Uploading audio file to the cloud")
     blob_name = video_to_audio(video_path, raw_audio_path, channels, bit_rate, sample_rate)
     
+    print("[INFO] Running google speech to text API")
     gcs_uri = f"gs://{BUCKET_NAME}/{raw_audio_name}"
     response = long_running_recognize(gcs_uri, channels, sample_rate)
     response_df = word_timestamp(response)
@@ -82,10 +87,11 @@ def process_video(video_path, filename):
     mask_audio = process_audio(raw_audio_path, beep_path, response_df)
     mask_audio.export(processed_audio_path, format="wav")
     #Remove audio 
-    command = f"ffmpeg -i {video_path} -vcodec copy -an {no_audio_video_path}"
+    command = f"ffmpeg -i {video_path} -vcodec copy -an -y {no_audio_video_path}"
     os.system(command)
-    command = f"ffmpeg -i {no_audio_video_path} -i {processed_audio_path} -c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -b:a 192k {processed_video}"
+    command = f"ffmpeg -i {no_audio_video_path} -i {processed_audio_path} -c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -b:a 192k -y {processed_video}"
     os.system(command)
+    print("[INFO] Final video is ready to download")
     
 
 @app.route('/uploads/<filename>')
@@ -95,4 +101,4 @@ def uploaded_file(filename):
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=True)

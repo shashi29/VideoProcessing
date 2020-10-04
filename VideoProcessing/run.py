@@ -39,6 +39,7 @@ import numpy as np
 from scipy.io import wavfile
 #Read from pickel file info
 import pickle
+import re
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="credentials.json"
 
@@ -238,22 +239,27 @@ def create_mask_audio(word_duration, beep_audio):
         return new_beep_audio[:word_duration]
     
 def process_audio(audio_path, beep_path, df):
+
     audio = AudioSegment.from_wav(audio_path)
-    #beep_audio = AudioSegment.from_wav(beep_path)
+    beep_audio = AudioSegment.from_wav(beep_path)
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
 
     bad_word = mask_word.split("\n")
     mask_audio = AudioSegment.empty()
+    print(f"[INFO] processing the audio and removing words: {bad_word}")
     for index, row in df.iterrows():
         try:
             word = row['word']
             word_start_time = row['word_start_time']
             word_end_time = row['word_start_time_lag']
             word_duration = word_end_time - word_start_time
+            word = re.sub(r'[^\w\s]', '', word)
+            #word = word.islower()
             if word in bad_word:
-                #mask_audio_word = create_mask_audio(word_duration,beep_audio) 
-                mask_audio_word = AudioSegment.silent(duration = word_duration)
+                print(f"[INFO] Bad word: {word}")
+                mask_audio_word = create_mask_audio(word_duration, beep_audio) 
+                #mask_audio_word = AudioSegment.silent(duration = word_duration)
                 mask_audio += mask_audio_word
             else:
                 mask_audio += audio[word_start_time:word_end_time]
