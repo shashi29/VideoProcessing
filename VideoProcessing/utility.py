@@ -101,7 +101,7 @@ def long_running_recognize(storage_uri, channels, sample_rate):
     response = operation.result()
     return response
 
-def subtitle_generation(speech_to_text_response, bin_size=3):
+def subtitle_generation(response, bin_size=3):
     """We define a bin of time period to display the words in sync with audio. 
     Here, bin_size = 3 means each bin is of 3 secs. 
     All the words in the interval of 3 secs in result will be grouped togather."""

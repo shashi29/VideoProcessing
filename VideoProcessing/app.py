@@ -2,6 +2,12 @@ import os
 import requests
 from flask import Flask, request, redirect, url_for, render_template, send_from_directory
 from werkzeug.utils import secure_filename
+from moviepy.editor import *
+from moviepy.video.tools.subtitles import SubtitlesClip
+from moviepy.tools import cvsecs
+from moviepy.video.VideoClip import TextClip, VideoClip
+from moviepy.video.tools.subtitles import SubtitlesClip
+from moviepy.video.io.VideoFileClip import VideoFileClip
 from run import *
 from utility import *
 
@@ -51,15 +57,27 @@ def index():
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             process_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), filename)
             return redirect(url_for('uploaded_file', filename=filename))
+
+    #os.system("rm -rf *.wav")
+    #os.system("rm -rf *.mp4")
     return render_template('index.html')
 
 
 def process_file(path, filename):
     process_video(path, filename)
-    
+
+def add_srt_video(srt_path, video_path):
+    print("[INFO] Adding srt file to the final video")
+    result_video_name = video_path#video_path[:-4] + '_result.mp4'
+    generator = lambda txt: TextClip(txt, font = 'Arial', fontsize = 16, color = 'white')
+    subtitles = SubtitlesClip(srt_path, generator)
+    video = VideoFileClip(video_path)
+    result = CompositeVideoClip([video, subtitles])
+    result.write_videofile(video_path, fps = video.fps)
+
+
 def process_video(video_path, filename):
    
-    #Delete all mp4 files and audio
     video_name = os.path.basename(video_path)
     video_name = video_name.split(".")[0]
     raw_audio_name = f'{video_name}_audio.wav'
@@ -77,16 +95,23 @@ def process_video(video_path, filename):
     gcs_uri = f"gs://{BUCKET_NAME}/{raw_audio_name}"
     response = long_running_recognize(gcs_uri, channels, sample_rate)
     response_df = word_timestamp(response)
+
+    #Add srt to the video
+    srt = subtitle_generation(response)
+    with open("subtitles.srt", "w") as f:
+        f.write(srt)
     
+
     #mask audio
     mask_audio = process_audio(raw_audio_path, beep_path, response_df)
     mask_audio.export(processed_audio_path, format="wav")
     #Remove audio 
-    command = f"ffmpeg -i {video_path} -vcodec copy -an {no_audio_video_path}"
+    command = f"ffmpeg -i {video_path} -vcodec copy -an -y {no_audio_video_path}"
     os.system(command)
-    command = f"ffmpeg -i {no_audio_video_path} -i {processed_audio_path} -c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -b:a 192k {processed_video}"
+    command = f"ffmpeg -i {no_audio_video_path} -i {processed_audio_path} -c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -b:a 192k -y {processed_video}"
     os.system(command)
-    
+    add_srt_video("subtitles.srt", processed_video)
+
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):

@@ -7,3 +7,6 @@ google-cloud-vision==1.0.0
 pytube3
 pydub
 srt
+opencv-python
+scipy
+ffpyplayer
