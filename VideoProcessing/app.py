@@ -92,10 +92,10 @@ def process_video(video_path, filename):
     command = f"ffmpeg -i {no_audio_video_path} -i {processed_audio_path} -c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -b:a 192k -y {processed_video}"
     os.system(command)
     print("[INFO] Final video is ready to download")
-    
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
+    filename = filename[:-4] + "_final_result.mp4"
     return send_from_directory(app.config['DOWNLOAD_FOLDER'], filename, as_attachment=True)
 
 
