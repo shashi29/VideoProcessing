@@ -186,7 +186,13 @@ def playVideo(video_path):
     video.release()
     cv2.destroyAllWindows()
 
-def word_timestamp(response):
+def clean_text(word):
+    word = clean_contractions(word)
+    word = to_lower(word)
+    
+    return word
+
+def word_timestamp(response, cleanText=True):
     word_list = list()
     word_start_sec_list = list() 
     word_start_nano_sec_list = list()
@@ -228,6 +234,15 @@ def word_timestamp(response):
     df['word_start_time'] = word_start_time_list
     df['word_end_time'] = word_end_time_list
     df['word_start_time_lag'] = word_start_time_lag
+
+    #Post cleaning on the dataframe
+    if cleanText:
+        word = df['word']
+        word = word.to_list()
+        word = clean_text(word)
+        removetable = str.maketrans('', '', '.,')
+        word =  [s.translate(removetable) for s in word]
+        df['word'] = word
 
     return df    
 
