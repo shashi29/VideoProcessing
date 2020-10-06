@@ -1,5 +1,7 @@
 import os
 import requests
+import zlib
+import zipfile
 from flask import Flask, request, redirect, url_for, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from run import *
@@ -7,7 +9,7 @@ from utility import *
 
 UPLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
 DOWNLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
-ALLOWED_EXTENSIONS = {'mp4'}
+ALLOWED_EXTENSIONS = {'mp4', 'srt'}
 
 app = Flask(__name__, static_url_path="/static")
 DIR_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -20,6 +22,17 @@ app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def compress(file_names_list, zip_file_name):
+    compression = zipfile.ZIP_DEFLATED
+    zf = zipfile.ZipFile(zip_file_name, mode="w")
+    try:
+        for file_name in file_names_list:
+            zf.write(file_name, file_name, compress_type=compression)
+    
+    except FileNotFoundError:
+        print("An error occurred")
+    finally:
+        zf.close()
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -52,8 +65,6 @@ def index():
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             process_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), filename)
             return redirect(url_for('uploaded_file', filename=filename))
-    return render_template('index.html')
-
 
 def process_file(path, filename):
     process_video(path, filename)
@@ -92,10 +103,22 @@ def process_video(video_path, filename):
     command = f"ffmpeg -i {no_audio_video_path} -i {processed_audio_path} -c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -b:a 192k -y {processed_video}"
     os.system(command)
     print("[INFO] Final video is ready to download")
+    
+    #Add subtitle writer
+    srt = subtitle_generation(response)
+    srt_file_name = os.path.join(app.config['DOWNLOAD_FOLDER'], "subtitles.srt")
+    with open(srt_file_name, "w") as f:
+        f.write(srt)
 
+    #Create zip file for video and srt file
+    file_to_combine_list = [final_video_name, "subtitles.srt"]
+    zip_file_name = filename[:-4] + ".zip"
+    compress(file_to_combine_list, zip_file_name)
+    
+    
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
-    filename = filename[:-4] + "_final_result.mp4"
+    filename = filename[:-4] + ".zip"
     return send_from_directory(app.config['DOWNLOAD_FOLDER'], filename, as_attachment=True)
 
 

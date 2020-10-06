@@ -8,8 +8,6 @@ from utility import *
 from run import *
 
 
-
-
 def add_srt_video(srt_path, video_path):
     print("[INFO] Adding srt file to the final video")
     result_video_name = video_path[:-4] + '_result.mp4'
@@ -18,6 +16,7 @@ def add_srt_video(srt_path, video_path):
     video = VideoFileClip(video_path)
     result = CompositeVideoClip([video, subtitles.set_pos(('center','bottom'))])
     result.write_videofile(video_path, fps=video.fps, temp_audiofile="temp-audio.m4a", remove_temp=True, codec="libx264", audio_codec="aac")
+
 
 
 if __name__ == "__main__":
@@ -49,8 +48,11 @@ if __name__ == "__main__":
     with open("subtitles.srt", "w") as f:
         f.write(srt)
     
-    response_df = word_timestamp(response)
+    response_df = word_timestamp(response, True)
     
+    #import pickle
+    #with open('test2.pickle', 'wb') as f:
+    #    pickle.dump(response, f)
     #mask audio
     mask_audio = process_audio(raw_audio_path, beep_path, response_df)
     mask_audio.export(processed_audio_path, format="wav")

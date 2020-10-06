@@ -202,24 +202,28 @@ def word_timestamp(response, cleanText=True):
     word_end_time_list = list()
 
     for result in response.results:
-        for i in range(len(result.alternatives[0].words) - 1):
-            word = result.alternatives[0].words[i].word
-            #if word in bad_word:
-            word_start_sec = result.alternatives[0].words[i].start_time.seconds
-            word_end_sec = result.alternatives[0].words[i].end_time.seconds
-            word_start_nano_sec = result.alternatives[0].words[i].start_time.nanos
-            word_end_nano_sec = result.alternatives[0].words[i].end_time.nanos
-            word_start_time = word_start_sec * pow(10,3) + word_start_nano_sec * pow(10,-6)
-            word_end_time = word_end_sec * pow(10,3) + word_end_nano_sec * pow(10,-6)
-            word_list.append(word)
-            word_start_sec_list.append(word_start_sec)
-            word_start_nano_sec_list.append(word_start_nano_sec)
-            word_end_sec_list.append(word_end_sec)
-            word_end_nano_sec_list.append(word_end_nano_sec)
-            word_start_time_list.append(word_start_time)
-            word_end_time_list.append(word_end_time)
+        for i in range(len(result.alternatives[0].words)):
+            try:
+                word = result.alternatives[0].words[i].word
+                #if word in bad_word:
+                word_start_sec = result.alternatives[0].words[i].start_time.seconds
+                word_end_sec = result.alternatives[0].words[i].end_time.seconds
+                word_start_nano_sec = result.alternatives[0].words[i].start_time.nanos
+                word_end_nano_sec = result.alternatives[0].words[i].end_time.nanos
+                word_start_time = word_start_sec * pow(10,3) + word_start_nano_sec * pow(10,-6)
+                word_end_time = word_end_sec * pow(10,3) + word_end_nano_sec * pow(10,-6)
+                word_list.append(word)
+                word_start_sec_list.append(word_start_sec)
+                word_start_nano_sec_list.append(word_start_nano_sec)
+                word_end_sec_list.append(word_end_sec)
+                word_end_nano_sec_list.append(word_end_nano_sec)
+                word_start_time_list.append(word_start_time)
+                word_end_time_list.append(word_end_time)
 
-    #Make starting point to zer0
+            except IndexError:
+                pass    
+            
+
     word_start_time_lag = copy.deepcopy(word_start_time_list)
     del word_start_time_lag[0]
     word_start_time_lag.append(-1)
@@ -248,10 +252,13 @@ def word_timestamp(response, cleanText=True):
 
 def create_mask_audio(word_duration, beep_audio):
     if len(beep_audio) >= word_duration:
-        return beep_audio[:word_duration]
+        return beep_audio[:word_duration], 0
+    if word_duration >= 400:
+        new_beep_audio = beep_audio * (int(word_duration//len(beep_audio))+1)
+        return new_beep_audio[:400], 1
     else:
         new_beep_audio = beep_audio * (int(word_duration//len(beep_audio))+1)
-        return new_beep_audio[:word_duration]
+        return new_beep_audio[:word_duration], 0
     
 def process_audio(audio_path, beep_path, df):
 
@@ -272,10 +279,14 @@ def process_audio(audio_path, beep_path, df):
             word = re.sub(r'[^\w\s]', '', word)
             #word = word.islower()
             if word in bad_word:
-                print(f"[INFO] Bad word: {word}")
-                mask_audio_word = create_mask_audio(word_duration, beep_audio) 
+                print(f"[INFO] {word} {word_start_time} {word_end_time}")                
+                mask_audio_word, flag = create_mask_audio(word_duration, beep_audio) 
                 #mask_audio_word = AudioSegment.silent(duration = word_duration)
                 mask_audio += mask_audio_word
+                if flag == 1:
+                    print(f"[INFO] longer audio ---> {word} {word_start_time} {word_end_time}")
+                    threshold = 400
+                    mask_audio += audio[word_start_time + threshold : word_end_time]
             else:
                 mask_audio += audio[word_start_time:word_end_time]
     

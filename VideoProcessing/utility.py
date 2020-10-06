@@ -153,7 +153,6 @@ def subtitle_generation(response, bin_size=3):
                         
                         # append bin transcript
                         transcriptions.append(srt.Subtitle(index, datetime.timedelta(0, start_sec, start_microsec), datetime.timedelta(0, previous_word_end_sec, previous_word_end_microsec), transcript))
-                        
                         # reset bin parameters
                         start_sec = word_start_sec
                         start_microsec = word_start_microsec
