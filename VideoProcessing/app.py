@@ -66,6 +66,8 @@ def index():
             process_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), filename)
             return redirect(url_for('uploaded_file', filename=filename))
 
+    return render_template('index.html')
+
 def process_file(path, filename):
     process_video(path, filename)
     
