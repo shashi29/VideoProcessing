@@ -41,8 +41,54 @@ from scipy.io import wavfile
 import pickle
 import re
 
+#Custom text detector
+from src.detector import Detector
+from src.recognizer import Recognizer
+import sys
+from shutil import rmtree
+
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="credentials.json"
 
+detector = Detector()
+detector.load()
+
+recognizer = Recognizer()
+recognizer.load()
+
+def detect_text_ocrMoran(img , frame_count):
+    with open('mask_word.txt') as fp1: 
+        mask_word = fp1.read() 
+    
+    mask_word = mask_word.split("\n")
+    
+    file_name = f'intermediate/temp_{frame_count}.txt'
+    file = open(file_name,'w')
+    crop_imgs,boxes,_,_ = detector.process(img)
+    rects = list()
+    for box in boxes:
+        poly = np.array(box).astype(np.int32)
+        y0, x0 = np.min(poly, axis=0)
+        y1, x1 = np.max(poly, axis=0)
+        rects.append([x0, y0, x1, y1])
+
+    for indx,rect in enumerate(rects):
+        try:
+            x0,y0,x1,y1 = rect
+            crop_img = img[x0:x1, y0:y1]
+            #crop_img = img[y0:y1, x0:x1, :]
+            gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
+            text, _, _ = recognizer.process(gray)
+    
+            if text in mask_word:
+                print(f"[INFO] Processing Frame content {text}")
+                
+                file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+        except Exception as ex:
+            print(f"[ERROR] {ex}")
+
+    file.close()
+    fp1.close()
+    print(f"[INFO] Processing Frame {frame_count}")
 def detect_text_googleVisonApi(path, frame_count):
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
@@ -117,10 +163,11 @@ def extract_mask_bbox_info(video_path):
             break
         
         height, width, channel = frame.shape
-        lower_height = int(6/8*height)
+        lower_height = int(4/8*height)
         img = frame[lower_height:height,0:width]
         
-            
+        detect_text_ocrMoran(img, count)
+        '''    
         if len(crop_list) > 1:
             prev_frame = crop_list[-1]
             prev_img = prev_frame[lower_height:height,0:width]
@@ -132,10 +179,23 @@ def extract_mask_bbox_info(video_path):
                 th.daemon = True
                 th.start()
         crop_list.append(frame)
-
+        '''
 
 def playVideo(video_path):
+    video_name = os.path.basename(video_path)
+    video_name = video_name.split(".")[0]
+    word_mask_video_path = video_name + "_mask_video.mp4"    
+    
     video=cv2.VideoCapture(video_path)
+    frame_width = int(video.get(3)) 
+    frame_height = int(video.get(4))    
+    size = (frame_width, frame_height)
+    fps = video.get(cv2.CAP_PROP_FPS)
+      
+    result = cv2.VideoWriter(word_mask_video_path,  
+                             cv2.VideoWriter_fourcc(*'MP4V'), 
+                             fps, size) 
+    
     count = -1
     previous_processed_frames = list()
     previous_processed_frames.append(0)     #Hack for first frame
@@ -147,7 +207,7 @@ def playVideo(video_path):
             break
                     
         height, width, channel = frame.shape
-        Offset = int(6/8*height)
+        Offset = int(4/8*height)
         #print(f"[INFO] Frame {count}")
         file_name = f'intermediate/temp_{count}.txt'
         if os.path.isfile(file_name):
@@ -178,11 +238,10 @@ def playVideo(video_path):
                         bb_mask = bb_mask.split(" ")
                         cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+Offset),(int(bb_mask[2]),int(bb_mask[3])+Offset),(0,0,255),-1)
             fp1.close()
-
-        if cv2.waitKey(30) & 0xFF == ord("q"):
-            break
-
-        cv2.imshow("Video", frame)
+        #Video writing part
+        result.write(frame)
+        cv2.imshow("frame", frame)
+        cv2.waitKey(30)
     video.release()
     cv2.destroyAllWindows()
 
@@ -298,12 +357,12 @@ def process_audio(audio_path, beep_path, df):
 
 if __name__ == "__main__":
 
-    video_path = "5.mp4"
+    video_path = "newVideo.mp4"
     audio_path = "audio.wav"
     beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"
 
-    os.remove(audio_path)        
+    #os.remove(audio_path)        
     #Remove intermediate files
     for temp_files in glob.glob("intermediate/*"):
         os.remove(temp_files)
@@ -315,6 +374,7 @@ if __name__ == "__main__":
     file = open('intermediate/temp_0.txt','w')
     file.close()
         
+    '''
     channels, bit_rate, sample_rate = video_info(video_path)
     blob_name = video_to_audio(video_path, audio_path, channels, bit_rate, sample_rate)
 
@@ -356,3 +416,4 @@ if __name__ == "__main__":
     # Print error message if the file does not exist
     except FileNotFoundError:
         print("Wav File does not exists")
+    '''

@@ -124,6 +124,44 @@ def uploaded_file(filename):
     return send_from_directory(app.config['DOWNLOAD_FOLDER'], filename, as_attachment=True)
 
 
+@app.route('/ocr', methods=['GET', 'POST']):
+def ocrVideo():
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            print('No file attached in request')
+            return redirect(request.url)
+        file = request.files['file']
+        try:
+            maskText = request.form['text-box']
+            print(f"[INFO] {maskText}") #.text)
+            maskText = maskText.split(" ")
+            with open('mask_word.txt', 'w') as writer:
+                print("[INFO] writing mask word")
+                for word in maskText:
+                    print(f"[INFO] {word}")
+                    word = word + '\n'
+                    writer.write(word)
+            
+            writer.close()
+            
+        except Exception as ex:
+            print(ex)
+            
+        if file.filename == '':
+            print('No file selected')
+            return redirect(request.url)
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            #process_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), filename)
+            process_ocr_video(os.path.join(app.config['UPLOAD_FOLDER'], filename), filename)
+            return redirect(url_for('uploaded_file', filename=filename))
+
+    return render_template('index.html')    
+
+def process_ocr_video(video_path, filename):
+    
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
