@@ -164,7 +164,7 @@ def extract_mask_bbox_info(video_path):
         
         height, width, channel = frame.shape
         lower_height = int(4/8*height)
-        img = frame[lower_height:height,0:width]
+        img = frame[lower_height:height, 0:width]
         
         detect_text_ocrMoran(img, count)
         '''    
@@ -306,8 +306,49 @@ def word_timestamp(response, cleanText=True):
         removetable = str.maketrans('', '', '.,')
         word =  [s.translate(removetable) for s in word]
         df['word'] = word
+        
+    df = addMuteFlag(df)
 
     return df    
+
+def addMuteFlag(new_df):
+    with open('mask_word.txt') as fp1: 
+        mask_word = fp1.read() 
+
+    mute_word_list = mask_word.split("\n")
+    info_dic = dict()
+    
+    for idx, i in enumerate(range(len(new_df))): 
+        #print(new_df.iloc[i, 0])
+        for wordGroup in mute_word_list:
+            for word in wordGroup.split(" "):
+                if word == new_df.iloc[i, 0]:
+                    mapIndex = wordGroup.split(" ").index(word)
+                    if mapIndex == 0:
+                        word_split_freq = wordGroup.split(" ")
+                        #find number of element to check in forward direction
+                        if len(word_split_freq) > 1:
+                            for indx,j in enumerate(range(i+mapIndex+1, i+len(wordGroup.split(" ")))):
+                                indx = indx + 1
+                                if word_split_freq[indx] == new_df.iloc[j, 0]:
+                                    print(indx, new_df.iloc[i, 0], new_df.iloc[j, 0])
+                                    if indx == len(word_split_freq)-1:
+                                        for c_indx in range(len(word_split_freq)):
+                                            info_dic[idx+c_indx] = 1
+        
+                        else:
+                            info_dic[idx] = 1     
+    #Further create list from the dic
+    muteFlag = list()
+    for indx, info in enumerate(range(len(new_df))):
+        if indx in info_dic.keys():
+            muteFlag.append(1)
+        else:
+            muteFlag.append(0)
+            
+    new_df['muteFlag'] = muteFlag
+    fp1.close()
+    return new_df
 
 def create_mask_audio(word_duration, beep_audio):
     if len(beep_audio) >= word_duration:
@@ -332,12 +373,13 @@ def process_audio(audio_path, beep_path, df):
     for index, row in df.iterrows():
         try:
             word = row['word']
+            muteFlag = row['muteFlag']
             word_start_time = row['word_start_time']
             word_end_time = row['word_start_time_lag']
             word_duration = word_end_time - word_start_time
             word = re.sub(r'[^\w\s]', '', word)
             #word = word.islower()
-            if word in bad_word:
+            if word in bad_word and muteFlag == 1:
                 print(f"[INFO] {word} {word_start_time} {word_end_time}")                
                 mask_audio_word, flag = create_mask_audio(word_duration, beep_audio) 
                 #mask_audio_word = AudioSegment.silent(duration = word_duration)

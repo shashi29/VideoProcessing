@@ -16,7 +16,7 @@ DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
 # limit upload size upto 20mb
-app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 
 def allowed_file(filename):
@@ -44,7 +44,7 @@ def index():
         try:
             maskText = request.form['text-box']
             print(f"[INFO] {maskText}") #.text)
-            maskText = maskText.split(" ")
+            maskText = maskText.split(",")
             with open('mask_word.txt', 'w') as writer:
                 print("[INFO] writing mask word")
                 for word in maskText:
@@ -71,6 +71,16 @@ def index():
 def process_file(path, filename):
     process_video(path, filename)
     
+def maskWordSrt(srt):
+    with open('mask_word.txt') as fp1: 
+        mask_word = fp1.read() 
+    
+    bad_word = mask_word.split("\n")
+    for word in bad_word:
+        srt = srt.replace(word, '*'*len(word))
+    fp1.close()
+    return srt
+
 def process_video(video_path, filename):
    
     #Delete all mp4 files and audio
@@ -113,7 +123,12 @@ def process_video(video_path, filename):
         f.write(srt)
 
     #Create zip file for video and srt file
-    file_to_combine_list = [final_video_name, "subtitles.srt"]
+    mask_srt_file_name = os.path.join(app.config['DOWNLOAD_FOLDER'], "mask_subtitles.srt")
+    mask_srt = maskWordSrt(srt)
+    with open(mask_srt_file_name, "w") as f:
+        f.write(mask_srt)
+    
+    file_to_combine_list = [final_video_name, "subtitles.srt", "mask_subtitles.srt"]
     zip_file_name = filename[:-4] + ".zip"
     compress(file_to_combine_list, zip_file_name)
     
@@ -124,7 +139,7 @@ def uploaded_file(filename):
     return send_from_directory(app.config['DOWNLOAD_FOLDER'], filename, as_attachment=True)
 
 
-@app.route('/ocr', methods=['GET', 'POST']):
+@app.route('/ocr', methods=['GET', 'POST'])
 def ocrVideo():
     if request.method == 'POST':
         if 'file' not in request.files:
@@ -158,9 +173,6 @@ def ocrVideo():
             return redirect(url_for('uploaded_file', filename=filename))
 
     return render_template('index.html')    
-
-def process_ocr_video(video_path, filename):
-    
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))

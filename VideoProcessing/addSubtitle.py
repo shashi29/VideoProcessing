@@ -21,12 +21,12 @@ def add_srt_video(srt_path, video_path):
 
 if __name__ == "__main__":
         
-    UPLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
-    DOWNLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
+    UPLOAD_FOLDER = '.' #os.path.dirname(os.path.abspath(__file__)) + '/'
+    DOWNLOAD_FOLDER = '.' #os.path.dirname(os.path.abspath(__file__)) + '/'
     ALLOWED_EXTENSIONS = {'mp4'}
-    DIR_PATH = os.path.dirname(os.path.realpath(__file__))
+    DIR_PATH = '.' #os.path.dirname(os.path.realpath(__file__))
 
-    video_path = r"C:/Users/shashi.raj/Desktop/Projects/VideoProcessing/test_video/test3.mp4"
+    video_path = r"C:/Users/shashi.raj/Desktop/Projects/VideoProcessing/test_video/test2.mp4"
     video_name = os.path.basename(video_path)
     video_name = video_name.split(".")[0]
     raw_audio_name = f'{video_name}_audio.wav'

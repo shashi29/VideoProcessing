@@ -134,6 +134,7 @@ def subtitle_generation(response, bin_size=3):
             
             # bin transcript
             transcript = result.alternatives[0].words[0].word
+            #transcript = transcript.tolower() 
             
             index += 1 # subtitle index
 
@@ -147,11 +148,14 @@ def subtitle_generation(response, bin_size=3):
 
                     if word_end_sec < end_sec:
                         transcript = transcript + " " + word
+                        #transcript = transcript.tolower() 
+
                     else:
                         previous_word_end_sec = result.alternatives[0].words[i].end_time.seconds
                         previous_word_end_microsec = result.alternatives[0].words[i].end_time.nanos * 0.001
                         
                         # append bin transcript
+                        transcript = transcript.lower() 
                         transcriptions.append(srt.Subtitle(index, datetime.timedelta(0, start_sec, start_microsec), datetime.timedelta(0, previous_word_end_sec, previous_word_end_microsec), transcript))
                         # reset bin parameters
                         start_sec = word_start_sec
@@ -163,6 +167,7 @@ def subtitle_generation(response, bin_size=3):
                 except IndexError:
                     pass
             # append transcript of last transcript in bin
+            transcript = transcript.lower()
             transcriptions.append(srt.Subtitle(index, datetime.timedelta(0, start_sec, start_microsec), datetime.timedelta(0, last_word_end_sec, last_word_end_microsec), transcript))
             index += 1
         except IndexError:
