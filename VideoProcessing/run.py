@@ -180,7 +180,8 @@ def extract_mask_bbox_info(video_path):
         lower_height = int(4/8*height)
         img = frame[lower_height:height, 0:width]
         
-        crop_list.append([img, count])
+        if count % 100 == 0:
+            crop_list.append([img, count])
         #future = executor.submit(detect_text_ocrMoran, (img, count))
         #future = executor.submit(detect_text_ocrMoran, (img, count))
     #with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -193,9 +194,7 @@ def extract_mask_bbox_info(video_path):
     #except Exception as ex:
     #    print(f"[ERROR] {ex}")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-        #for im,crop_list in zip(file_list,executor.map(detect_text_ocrMoran, crop_list)):
-        #    print(f"[INFO]processing {im[1]}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()/4) as executor:
         executor.map(detect_text_ocrMoran, crop_list)                   
 
     '''    
@@ -253,7 +252,7 @@ def playVideo(video_path):
                 for bb_mask in mask_word_box:
                     bb_mask = bb_mask.split(" ")
                     cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+Offset),(int(bb_mask[2]),int(bb_mask[3])+Offset),(0,0,255),-1)
-        fp1.close()
+            fp1.close()
 
         if os.path.isfile(file_name) == False:
             prev_count = previous_processed_frames[len(previous_processed_frames)-1]
@@ -268,13 +267,13 @@ def playVideo(video_path):
                     for bb_mask in mask_word_box:
                         bb_mask = bb_mask.split(" ")
                         cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+Offset),(int(bb_mask[2]),int(bb_mask[3])+Offset),(0,0,255),-1)
-            fp1.close()
+                fp1.close()
         #Video writing part
         result.write(frame)
-        cv2.imshow("frame", frame)
-        cv2.waitKey(30)
-    video.release()
-    cv2.destroyAllWindows()
+        #cv2.imshow("frame", frame)
+        #cv2.waitKey(30)
+    #video.release()
+    #cv2.destroyAllWindows()
 
 def clean_text(word):
     word = clean_contractions(word)
@@ -449,6 +448,8 @@ if __name__ == "__main__":
     file = open('intermediate/temp_0.txt','w')
     file.close()
         
+    playVideo(video_path)
+    
     '''
     channels, bit_rate, sample_rate = video_info(video_path)
     blob_name = video_to_audio(video_path, audio_path, channels, bit_rate, sample_rate)

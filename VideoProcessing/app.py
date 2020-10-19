@@ -2,10 +2,12 @@ import os
 import requests
 import zlib
 import zipfile
+import threading
 from flask import Flask, request, redirect, url_for, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 from run import *
 from utility import *
+
 
 UPLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
 DOWNLOAD_FOLDER = os.path.dirname(os.path.abspath(__file__)) + '/'
@@ -172,7 +174,53 @@ def ocrVideo():
             process_ocr_video(os.path.join(app.config['UPLOAD_FOLDER'], filename), filename)
             return redirect(url_for('uploaded_file', filename=filename))
 
-    return render_template('index.html')    
+    return render_template('index.html')
+
+def process_ocr_video(video_path, filename):
+    for temp_files in glob.glob("intermediate/*"):
+        os.remove(temp_files)    
+
+    video_name = os.path.basename(video_path)
+    video_name = video_name.split(".")[0]
+    word_mask_video_path = video_name + "_mask_video.mp4"
+    video_name = video_name.split(".")[0]
+    raw_audio_name = f'{video_name}_audio.wav'
+    beep_path = "beep.wav"
+    raw_audio_path = os.path.join(app.config['UPLOAD_FOLDER'], raw_audio_name)
+    processed_audio_name = f'{video_name}_final.wav'
+    processed_audio_path = os.path.join(app.config['UPLOAD_FOLDER'], processed_audio_name)
+    BUCKET_NAME = "audio_2020"
+    no_audio_video_path = video_path[:-4] + '_No_Audio.mp4'
+    final_video_name = video_name + "_final_result.mp4"
+    processed_video = os.path.join(app.config['DOWNLOAD_FOLDER'], final_video_name)
+
+    thread = threading.Thread(target=extract_mask_bbox_info, args=(video_path,))
+    thread.start()
+    print("[INFO] Find details of all mask word in video")
+
+    print("[INFO] Extracting audio output from video")
+    channels, bit_rate, sample_rate = video_info(video_path)
+    print("[INFO] Uploading audio file to the cloud")
+    blob_name = video_to_audio(video_path, raw_audio_path, channels, bit_rate, sample_rate)
+    
+    print("[INFO] Running google speech to text API")
+    gcs_uri = f"gs://{BUCKET_NAME}/{raw_audio_name}"
+    response = long_running_recognize(gcs_uri, channels, sample_rate)
+    response_df = word_timestamp(response)
+    
+    #mask audio
+    mask_audio = process_audio(raw_audio_path, beep_path, response_df)
+    mask_audio.export(processed_audio_path, format="wav")
+
+    thread.join()
+    playVideo(video_path)
+    command = f"ffmpeg -i {word_mask_video_path} -i {processed_audio_path} -c:v copy -map 0:v:0 -map 1:a:0 -c:a aac -b:a 192k -y {processed_video}"
+    os.system(command)
+    file_to_combine_list = [final_video_name]
+    zip_file_name = filename[:-4] + ".zip"
+    compress(file_to_combine_list, zip_file_name)
+    print("[INFO] Final video is ready to download")
+    #Find video and zip all the content
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
