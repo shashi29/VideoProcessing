@@ -46,8 +46,17 @@ from src.detector import Detector
 from src.recognizer import Recognizer
 import sys
 from shutil import rmtree
+import concurrent.futures
+from multiprocessing import Pool
+from multiprocessing import cpu_count
+#import ray
+import torch
+torch.set_num_threads(os.cpu_count())
+from concurrent.futures import ThreadPoolExecutor
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="credentials.json"
+
+#ray.init()
 
 detector = Detector()
 detector.load()
@@ -55,7 +64,11 @@ detector.load()
 recognizer = Recognizer()
 recognizer.load()
 
-def detect_text_ocrMoran(img , frame_count):
+#@ray.remote
+#def detect_text_ocrMoran(img , frame_count):
+def detect_text_ocrMoran(info):
+    img = info[0]
+    frame_count = info[1]
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
     
@@ -89,6 +102,7 @@ def detect_text_ocrMoran(img , frame_count):
     file.close()
     fp1.close()
     print(f"[INFO] Processing Frame {frame_count}")
+
 def detect_text_googleVisonApi(path, frame_count):
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
@@ -166,8 +180,25 @@ def extract_mask_bbox_info(video_path):
         lower_height = int(4/8*height)
         img = frame[lower_height:height, 0:width]
         
-        detect_text_ocrMoran(img, count)
-        '''    
+        crop_list.append([img, count])
+        #future = executor.submit(detect_text_ocrMoran, (img, count))
+        #future = executor.submit(detect_text_ocrMoran, (img, count))
+    #with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+    #    executor.map(detect_text_ocrMoran, crop_list)
+        #detect_text_ocrMoran(img, count)
+
+    #try:
+    #    for info1,info2 in zip(crop_list[0::2], crop_list[1::2]):
+    #        ray.get([detect_text_ocrMoran.remote(info1[0], info1[1]), detect_text_ocrMoran.remote(info2[0],info2[1])])
+    #except Exception as ex:
+    #    print(f"[ERROR] {ex}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        #for im,crop_list in zip(file_list,executor.map(detect_text_ocrMoran, crop_list)):
+        #    print(f"[INFO]processing {im[1]}")
+        executor.map(detect_text_ocrMoran, crop_list)                   
+
+    '''    
         if len(crop_list) > 1:
             prev_frame = crop_list[-1]
             prev_img = prev_frame[lower_height:height,0:width]
@@ -179,7 +210,7 @@ def extract_mask_bbox_info(video_path):
                 th.daemon = True
                 th.start()
         crop_list.append(frame)
-        '''
+    '''
 
 def playVideo(video_path):
     video_name = os.path.basename(video_path)
@@ -379,7 +410,8 @@ def process_audio(audio_path, beep_path, df):
             word_duration = word_end_time - word_start_time
             word = re.sub(r'[^\w\s]', '', word)
             #word = word.islower()
-            if word in bad_word and muteFlag == 1:
+            #if word in bad_word and muteFlag == 1:
+            if muteFlag == 1 or word in bad_word:
                 print(f"[INFO] {word} {word_start_time} {word_end_time}")                
                 mask_audio_word, flag = create_mask_audio(word_duration, beep_audio) 
                 #mask_audio_word = AudioSegment.silent(duration = word_duration)
@@ -399,7 +431,7 @@ def process_audio(audio_path, beep_path, df):
 
 if __name__ == "__main__":
 
-    video_path = "newVideo.mp4"
+    video_path = "test2.mp4"
     audio_path = "audio.wav"
     beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"
@@ -409,9 +441,10 @@ if __name__ == "__main__":
     for temp_files in glob.glob("intermediate/*"):
         os.remove(temp_files)
     
-    th = threading.Thread(target = extract_mask_bbox_info, args=(video_path, ))
-    th.daemon = True
-    th.start()
+    #th = threading.Thread(target = extract_mask_bbox_info, args=(video_path, ))
+    #th.daemon = True
+    #th.start()
+    extract_mask_bbox_info(video_path)
     print("[INFO] Find details of all mask word in video")
     file = open('intermediate/temp_0.txt','w')
     file.close()
