@@ -180,7 +180,7 @@ def extract_mask_bbox_info(video_path):
         lower_height = int(4/8*height)
         img = frame[lower_height:height, 0:width]
         
-        if count % 100 == 0:
+        if count % 10 == 0:
             crop_list.append([img, count])
         #future = executor.submit(detect_text_ocrMoran, (img, count))
         #future = executor.submit(detect_text_ocrMoran, (img, count))
@@ -430,7 +430,7 @@ def process_audio(audio_path, beep_path, df):
 
 if __name__ == "__main__":
 
-    video_path = "test2.mp4"
+    video_path = "test1.mp4"
     audio_path = "audio.wav"
     beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"

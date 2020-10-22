@@ -19,7 +19,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
 # limit upload size upto 20mb
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
-
+#https://stackoverflow.com/questions/8270092/remove-all-whitespace-in-a-string
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -50,6 +50,7 @@ def index():
             with open('mask_word.txt', 'w') as writer:
                 print("[INFO] writing mask word")
                 for word in maskText:
+                    word = word.strip()
                     print(f"[INFO] {word}")
                     word = word + '\n'
                     writer.write(word)
@@ -156,6 +157,7 @@ def ocrVideo():
                 print("[INFO] writing mask word")
                 for word in maskText:
                     print(f"[INFO] {word}")
+                    word = word.strip()
                     word = word + '\n'
                     writer.write(word)
             
