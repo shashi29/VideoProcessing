@@ -73,6 +73,10 @@ def detect_text_ocrMoran(info):
         mask_word = fp1.read() 
     
     mask_word = mask_word.split("\n")
+    #Add capitalizie letter also
+    for word in mask_word:
+        updated_mask_word.append(word)
+        updated_mask_word.append(word.capitalize())
     
     file_name = f'intermediate/temp_{frame_count}.txt'
     file = open(file_name,'w')
@@ -92,7 +96,7 @@ def detect_text_ocrMoran(info):
             gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
             text, _, _ = recognizer.process(gray)
     
-            if text in mask_word:
+            if text in updated_mask_word:
                 print(f"[INFO] Processing Frame content {text}")
                 
                 file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')

@@ -152,7 +152,7 @@ def ocrVideo():
         try:
             maskText = request.form['text-box']
             print(f"[INFO] {maskText}") #.text)
-            maskText = maskText.split(" ")
+            maskText = maskText.split(",")
             with open('mask_word.txt', 'w') as writer:
                 print("[INFO] writing mask word")
                 for word in maskText:
