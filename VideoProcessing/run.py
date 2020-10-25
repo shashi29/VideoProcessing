@@ -51,7 +51,7 @@ from multiprocessing import Pool
 from multiprocessing import cpu_count
 #import ray
 import torch
-torch.set_num_threads(os.cpu_count())
+#torch.set_num_threads(os.cpu_count())
 from concurrent.futures import ThreadPoolExecutor
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="credentials.json"
@@ -74,9 +74,9 @@ def detect_text_ocrMoran(info):
     
     mask_word = mask_word.split("\n")
     #Add capitalizie letter also
-    for word in mask_word:
-        updated_mask_word.append(word)
-        updated_mask_word.append(word.capitalize())
+    #for word in mask_word:
+    #    updated_mask_word.append(word)
+    #    updated_mask_word.append(word.capitalize())
     
     file_name = f'intermediate/temp_{frame_count}.txt'
     file = open(file_name,'w')
@@ -96,7 +96,7 @@ def detect_text_ocrMoran(info):
             gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
             text, _, _ = recognizer.process(gray)
     
-            if text in updated_mask_word:
+            if text in mask_word:
                 print(f"[INFO] Processing Frame content {text}")
                 
                 file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
@@ -184,8 +184,10 @@ def extract_mask_bbox_info(video_path):
         lower_height = int(4/8*height)
         img = frame[lower_height:height, 0:width]
         
-        if count % 10 == 0:
+        if count % 1 == 0:
+            #print(f"[INFO] Shape of frame {frame.shape}")
             crop_list.append([img, count])
+            #detect_text_ocrMoran([img, count])
         #future = executor.submit(detect_text_ocrMoran, (img, count))
         #future = executor.submit(detect_text_ocrMoran, (img, count))
     #with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -198,6 +200,7 @@ def extract_mask_bbox_info(video_path):
     #except Exception as ex:
     #    print(f"[ERROR] {ex}")
 
+    print(f"[INFO] number of frames to processs {len(crop_list)}")
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()/4) as executor:
         executor.map(detect_text_ocrMoran, crop_list)                   
 
@@ -434,7 +437,7 @@ def process_audio(audio_path, beep_path, df):
 
 if __name__ == "__main__":
 
-    video_path = "test1.mp4"
+    video_path = "test2.mp4"
     audio_path = "audio.wav"
     beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"
