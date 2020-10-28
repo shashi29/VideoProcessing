@@ -437,13 +437,14 @@ def process_audio(audio_path, beep_path, df):
 
 if __name__ == "__main__":
 
-    video_path = "test2.mp4"
+    video_path = r"C:\Users\shashi.raj\Desktop\Projects\VideoProcessing\test_video\test2.mp4"
     audio_path = "audio.wav"
     beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"
 
     #os.remove(audio_path)        
     #Remove intermediate files
+    '''
     for temp_files in glob.glob("intermediate/*"):
         os.remove(temp_files)
     
@@ -499,4 +500,4 @@ if __name__ == "__main__":
     # Print error message if the file does not exist
     except FileNotFoundError:
         print("Wav File does not exists")
-    '''
+    

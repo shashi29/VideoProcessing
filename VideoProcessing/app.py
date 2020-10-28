@@ -74,6 +74,7 @@ def index():
 def process_file(path, filename):
     process_video(path, filename)
     
+'''
 def maskWordSrt(srt):
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
@@ -83,6 +84,42 @@ def maskWordSrt(srt):
         srt = srt.replace(word, '*'*len(word))
     fp1.close()
     return srt
+'''
+def mask_response_generation(response):
+    with open('mask_word.txt') as fp1: 
+        mask_word = fp1.read() 
+    
+    mask_word = mask_word.split("\n")
+    for result in response.results:
+        document = result.alternatives[0].transcript.lower()
+        for word in mask_word:
+            to_replace = ''
+            for space_indx,w in enumerate(word.split(" ")):
+                mask_string = "*"*len(w)
+                to_replace += mask_string
+                if space_indx == len(word.split(" "))-1:
+                    continue
+                to_replace += " "
+            document = document.replace(word, to_replace)
+        result.alternatives[0].transcript = document
+    
+    for issue_indx, result in enumerate(response.results):
+        #print(result.alternatives[0].transcript)
+        mask_index = list()
+        for idx, word in enumerate(result.alternatives[0].transcript.split(" ")):
+            if issue_indx > 0:
+                idx = idx-1
+            try:
+                if word[0] == "*":
+                    mask_index.append(idx)
+            except Exception as ex:
+                pass
+            #print(f"[INFO] index of word to mask {mask_index}")
+            for i in range(len(result.alternatives[0].words)):
+                word = result.alternatives[0].words[i].word
+                if i in mask_index:
+                    result.alternatives[0].words[i].word = "*"*len(word)
+    return response
 
 def process_video(video_path, filename):
    
@@ -108,7 +145,7 @@ def process_video(video_path, filename):
     gcs_uri = f"gs://{BUCKET_NAME}/{raw_audio_name}"
     response = long_running_recognize(gcs_uri, channels, sample_rate)
     response_df = word_timestamp(response)
-    
+    response_df.to_csv("mask_word_time_stamp.csv", index=False)
     #mask audio
     mask_audio = process_audio(raw_audio_path, beep_path, response_df)
     mask_audio.export(processed_audio_path, format="wav")
@@ -127,11 +164,12 @@ def process_video(video_path, filename):
 
     #Create zip file for video and srt file
     mask_srt_file_name = os.path.join(app.config['DOWNLOAD_FOLDER'], "mask_subtitles.srt")
-    mask_srt = maskWordSrt(srt)
+    mask_response = mask_response_generation(response)
+    mask_srt = subtitle_generation(mask_response)
     with open(mask_srt_file_name, "w") as f:
         f.write(mask_srt)
     
-    file_to_combine_list = [final_video_name, "subtitles.srt", "mask_subtitles.srt"]
+    file_to_combine_list = [final_video_name, "subtitles.srt", "mask_subtitles.srt", "mask_word_time_stamp.csv"]
     zip_file_name = filename[:-4] + ".zip"
     compress(file_to_combine_list, zip_file_name)
     
