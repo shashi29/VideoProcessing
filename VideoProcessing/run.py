@@ -53,6 +53,7 @@ from multiprocessing import cpu_count
 import torch
 #torch.set_num_threads(os.cpu_count())
 from concurrent.futures import ThreadPoolExecutor
+from infer import *
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="credentials.json"
 
@@ -61,8 +62,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="credentials.json"
 detector = Detector()
 detector.load()
 
-recognizer = Recognizer()
-recognizer.load()
+recognizer = bilstm_infer()
 
 #@ray.remote
 #def detect_text_ocrMoran(img , frame_count):
@@ -89,19 +89,19 @@ def detect_text_ocrMoran(info):
         rects.append([x0, y0, x1, y1])
 
     for indx,rect in enumerate(rects):
-        try:
-            x0,y0,x1,y1 = rect
-            crop_img = img[x0:x1, y0:y1]
-            #crop_img = img[y0:y1, x0:x1, :]
-            gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
-            text, _, _ = recognizer.process(gray)
-    
-            if text in mask_word:
-                print(f"[INFO] Processing Frame content {text}")
-                
-                file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
-        except Exception as ex:
-            print(f"[ERROR] {ex}")
+        #try:
+        x0,y0,x1,y1 = rect
+        crop_img = img[x0:x1, y0:y1]
+        #crop_img = img[y0:y1, x0:x1, :]
+        gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
+        text, _, _ = recognizer.process(gray)
+
+        if text in mask_word:
+            print(f"[INFO] Processing Frame content {text}")
+            
+            file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+        #except Exception as ex:
+        #    print(f"[ERROR] {ex}")
 
     file.close()
     fp1.close()
@@ -444,7 +444,6 @@ if __name__ == "__main__":
 
     #os.remove(audio_path)        
     #Remove intermediate files
-    '''
     for temp_files in glob.glob("intermediate/*"):
         os.remove(temp_files)
     
@@ -500,4 +499,4 @@ if __name__ == "__main__":
     # Print error message if the file does not exist
     except FileNotFoundError:
         print("Wav File does not exists")
-    
+    '''
