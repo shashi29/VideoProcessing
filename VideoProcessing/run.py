@@ -73,11 +73,6 @@ def detect_text_ocrMoran(info):
         mask_word = fp1.read() 
     
     mask_word = mask_word.split("\n")
-    #Add capitalizie letter also
-    #for word in mask_word:
-    #    updated_mask_word.append(word)
-    #    updated_mask_word.append(word.capitalize())
-    
     file_name = f'intermediate/temp_{frame_count}.txt'
     file = open(file_name,'w')
     crop_imgs,boxes,_,_ = detector.process(img)
@@ -93,8 +88,12 @@ def detect_text_ocrMoran(info):
         x0,y0,x1,y1 = rect
         crop_img = img[x0:x1, y0:y1]
         #crop_img = img[y0:y1, x0:x1, :]
-        gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
-        text, _, _ = recognizer.process(gray)
+        #gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
+        for i in range(10):
+            file_name = f'tmp/{i}_.jpg'
+            cv2.imwrite(file_name, crop_img)
+        text = recognizer.process()
+        print(text)
 
         if text in mask_word:
             print(f"[INFO] Processing Frame content {text}")
@@ -201,7 +200,7 @@ def extract_mask_bbox_info(video_path):
     #    print(f"[ERROR] {ex}")
 
     print(f"[INFO] number of frames to processs {len(crop_list)}")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()/4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
         executor.map(detect_text_ocrMoran, crop_list)                   
 
     '''    
@@ -437,7 +436,7 @@ def process_audio(audio_path, beep_path, df):
 
 if __name__ == "__main__":
 
-    video_path = r"C:\Users\shashi.raj\Desktop\Projects\VideoProcessing\test_video\test2.mp4"
+    video_path = "test1.mp4"
     audio_path = "audio.wav"
     beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"

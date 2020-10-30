@@ -17,7 +17,12 @@ from modules.transformation import TPS_SpatialTransformerNetwork
 from modules.feature_extraction import VGG_FeatureExtractor, RCNN_FeatureExtractor, ResNet_FeatureExtractor
 from modules.sequence_modeling import BidirectionalLSTM
 from modules.prediction import Attention
-
+from natsort import natsorted
+from PIL import Image
+import numpy as np
+from torch.utils.data import Dataset, ConcatDataset, Subset
+from torch._utils import _accumulate
+import torchvision.transforms as transforms
 #Utility file code
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -278,6 +283,8 @@ class config:
     output_channel = 512
     hidden_size = 256
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    batch_size = 192
+    image_folder = 'tmp/'
 
 class ResizeNormalize(object):
     def __init__(self, size, interpolation=Image.BICUBIC):
@@ -290,6 +297,81 @@ class ResizeNormalize(object):
         img = self.toTensor(img)
         img.sub_(0.5).div_(0.5)
         return img
+
+class RawDataset(Dataset):
+
+    def __init__(self, root, opt):
+        self.opt = opt
+        self.image_path_list = []
+        for dirpath, dirnames, filenames in os.walk(root):
+            for name in filenames:
+                _, ext = os.path.splitext(name)
+                ext = ext.lower()
+                if ext == '.jpg' or ext == '.jpeg' or ext == '.png':
+                    self.image_path_list.append(os.path.join(dirpath, name))
+
+        self.image_path_list = natsorted(self.image_path_list)
+        self.nSamples = len(self.image_path_list)
+
+    def __len__(self):
+        return self.nSamples
+
+    def __getitem__(self, index):
+
+        try:
+            if self.opt.rgb:
+                print(f"[INFO] {self.image_path_list[index]}")
+                img = Image.open(self.image_path_list[index]).convert('RGB')  # for color image
+            else:
+                img = Image.open(self.image_path_list[index]).convert('L')
+
+        except IOError:
+            print(f'Corrupted image for {index}')
+            # make dummy image and dummy label for corrupted image.
+            if self.opt.rgb:
+                img = Image.new('RGB', (self.opt.imgW, self.opt.imgH))
+            else:
+                img = Image.new('L', (self.opt.imgW, self.opt.imgH))
+
+        return (img, self.image_path_list[index])
+
+
+class AlignCollate(object):
+    def __init__(self, imgH=32, imgW=100, keep_ratio_with_pad=False):
+        self.imgH = imgH
+        self.imgW = imgW
+        self.keep_ratio_with_pad = keep_ratio_with_pad
+
+    def __call__(self, batch):
+        batch = filter(lambda x: x is not None, batch)
+        images, labels = zip(*batch)
+
+        if self.keep_ratio_with_pad:  # same concept with 'Rosetta' paper
+            resized_max_w = self.imgW
+            input_channel = 3 if images[0].mode == 'RGB' else 1
+            transform = NormalizePAD((input_channel, self.imgH, resized_max_w))
+
+            resized_images = []
+            for image in images:
+                w, h = image.size
+                ratio = w / float(h)
+                if math.ceil(self.imgH * ratio) > self.imgW:
+                    resized_w = self.imgW
+                else:
+                    resized_w = math.ceil(self.imgH * ratio)
+
+                resized_image = image.resize((resized_w, self.imgH), Image.BICUBIC)
+                resized_images.append(transform(resized_image))
+                # resized_image.save('./image_test/%d_test.jpg' % w)
+
+            image_tensors = torch.cat([t.unsqueeze(0) for t in resized_images], 0)
+
+        else:
+            transform = ResizeNormalize((self.imgW, self.imgH))
+            image_tensors = [transform(image) for image in images]
+            image_tensors = torch.cat([t.unsqueeze(0) for t in image_tensors], 0)
+
+        return image_tensors, labels
 
 class bilstm_infer():
     def __init__(self, opt=config):
@@ -310,40 +392,49 @@ class bilstm_infer():
         self.model = model
         self.opt = opt
         
-    def process(self, img):
-        transform = ResizeNormalize((self.opt.imgW, self.opt.imgH))
-        images = [img]
-        image_tensors = [transform(image) for image in images]
-        image_tensors = torch.cat([t.unsqueeze(0) for t in image_tensors], 0)
+    def process(self):
+        #self.opt.image_folder = "demo_image"
+        # prepare data. two demo images from https://github.com/bgshih/crnn#run-demo
+        AlignCollate_demo = AlignCollate(imgH=self.opt.imgH, imgW=self.opt.imgW, keep_ratio_with_pad=self.opt.PAD)
+        demo_data = RawDataset(root=self.opt.image_folder, opt=self.opt)  # use RawDataset
+        demo_loader = torch.utils.data.DataLoader(
+            demo_data, batch_size=self.opt.batch_size,
+            shuffle=False,
+            num_workers=int(self.opt.workers),
+            collate_fn=AlignCollate_demo, pin_memory=True)
+
         with torch.no_grad():
-            batch_size = image_tensors.size(0)
-            image = image_tensors.to(self.opt.device)
-            # For max length prediction
-            length_for_pred = torch.IntTensor([self.opt.batch_max_length] * batch_size).to(self.opt.device)
-            text_for_pred = torch.LongTensor(batch_size, self.opt.batch_max_length + 1).fill_(0).to(self.opt.device)
-        
-            preds = self.model(image, text_for_pred, is_train=False)
-            _, preds_index = preds.max(2)
-            preds_str = self.converter.decode(preds_index, length_for_pred)
-            
-            preds_prob = F.softmax(preds, dim=2)
-            preds_max_prob, _ = preds_prob.max(dim=2)
-            for pred, pred_max_prob in zip(preds_str, preds_max_prob):
-                if 'Attn' in self.opt.Prediction:
-                    pred_EOS = pred.find('[s]')
-                    pred = pred[:pred_EOS]  # prune after "end of sentence" token ([s])
-                    pred_max_prob = pred_max_prob[:pred_EOS]
+            for image_tensors, image_path_list in demo_loader:
+                batch_size = image_tensors.size(0)
+                image = image_tensors.to(device)
+                # For max length prediction
+                length_for_pred = torch.IntTensor([self.opt.batch_max_length] * batch_size).to(device)
+                text_for_pred = torch.LongTensor(batch_size, self.opt.batch_max_length + 1).fill_(0).to(device)
 
-                # calculate confidence score (= multiply of pred_max_prob)
-                confidence_score = pred_max_prob.cumprod(dim=0)[-1]
-                print(f'[Bilstm Resnet Prediction] {pred:25s}\t{confidence_score:0.4f}')
-                return pred, confidence_score
+                preds = self.model(image, text_for_pred, is_train=False)
 
+                # select max probabilty (greedy decoding) then decode index to character
+                _, preds_index = preds.max(2)
+                preds_str = self.converter.decode(preds_index, length_for_pred)
+
+                preds_prob = F.softmax(preds, dim=2)
+                preds_max_prob, _ = preds_prob.max(dim=2)
+                for img_name, pred, pred_max_prob in zip(image_path_list, preds_str, preds_max_prob):
+                    if 'Attn' in self.opt.Prediction:
+                        pred_EOS = pred.find('[s]')
+                        pred = pred[:pred_EOS]  # prune after "end of sentence" token ([s])
+                        pred_max_prob = pred_max_prob[:pred_EOS]
+
+                    # calculate confidence score (= multiply of pred_max_prob)
+                    confidence_score = pred_max_prob.cumprod(dim=0)[-1]
+
+                    #print(f'{img_name:25s}\t{pred:25s}\t{confidence_score:0.4f}')
+        files = glob.glob(f'{self.opt.image_folder}/*')
+        for f in files:
+            os.remove(f)
+        return pred
 
 if __name__ == "__main__":
     folder_path = "demo_image"
-    imgList = glob.glob(f"{folder_path}/*")
     BI = bilstm_infer()
-    for imgPath in imgList:
-        img = Image.open(imgPath).convert('L')
-        pred, confidence_score = BI(img)
+    print(BI.process())
