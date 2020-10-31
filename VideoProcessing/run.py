@@ -67,58 +67,68 @@ recognizer = bilstm_infer()
 #@ray.remote
 #def detect_text_ocrMoran(img , frame_count):
 def detect_text_ocrMoran(info):
-    img = info[0]
-    frame_count = info[1]
-    with open('mask_word.txt') as fp1: 
-        mask_word = fp1.read() 
-    
-    img_name = f'tmp/frame_{frame_count}.jpg'
-    #cv2.imwrite(img_name, img)
-    mask_word = mask_word.split("\n")
-    file_name = f'intermediate/temp_{frame_count}.txt'
-    file = open(file_name,'w')
-    crop_imgs,boxes,_,_ = detector.process(img)
-    rects = list()
-    for box in boxes:
-        poly = np.array(box).astype(np.int32)
-        y0, x0 = np.min(poly, axis=0)
-        y1, x1 = np.max(poly, axis=0)
-        rects.append([x0, y0, x1, y1])
+    try:
+        img = info[0]
+        frame_count = info[1]
+        with open('mask_word.txt') as fp1: 
+            mask_word = fp1.read() 
+        
+        img_name = f'tmp/frame_{frame_count}.jpg'
+        #cv2.imwrite(img_name, img)
+        mask_word = mask_word.split("\n")
+        file_name = f'intermediate/temp_{frame_count}.txt'
+        file = open(file_name,'w')
+        crop_imgs,boxes,_,_ = detector.process(img)
+        rects = list()
+        for box in boxes:
+            poly = np.array(box).astype(np.int32)
+            y0, x0 = np.min(poly, axis=0)
+            y1, x1 = np.max(poly, axis=0)
+            rects.append([x0, y0, x1, y1])
 
-    crop_img_list = list()
-    if len(rects) > 4:
-        for indx,rect in enumerate(rects):
-            x0,y0,x1,y1 = rect
-            crop_img = img[x0:x1, y0:y1]
-            crop_img = Image.fromarray(crop_img).convert('L')
-            crop_img_list.append(crop_img)
-        text_list = recognizer.process_img_list(crop_img_list)
-        #print(f"[INFO] Content of frame:{frame_count} {text_list}")
-        for word_index, text in enumerate(text_list):
-            if text in mask_word:
-                rect = rects[word_index]
+        crop_img_list = list()
+        if len(rects) > 4:
+            for indx,rect in enumerate(rects):
                 x0,y0,x1,y1 = rect
-                print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
+                crop_img = img[x0:x1, y0:y1]
+                crop_img = Image.fromarray(crop_img).convert('L')
+                crop_img_list.append(crop_img)
+            text_list = recognizer.process_img_list(crop_img_list)
+            text_list = clean_text(text_list)
+            #print(f"[INFO] Content of frame:{frame_count} {text_list}")
+            for word_index, text in enumerate(text_list):
+                if text in mask_word:
+                    rect = rects[word_index]
+                    x0,y0,x1,y1 = rect
+                    print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
+                    img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)
+                    file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+        if len(rects) < 4:
+            for indx,rect in enumerate(rects):
+                x0,y0,x1,y1 = rect
+                crop_img = img[x0:x1, y0:y1]
+                crop_img = Image.fromarray(crop_img).convert('L')
+                text = recognizer.process_img(crop_img)
+                newText = [text]
+                newText = clean_text(newText)
+                text = newText[0]
+                if text in mask_word:
+                    #print(f"[INFO] Processing Frame:{frame_count} content {text}")
+                    img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)            
+                    file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+        file_name = f"tmp/{frame_count}.jpg"
+        cv2.imwrite(file_name, img)
+        if len(rects) == 0:
+            pass
+            #print("[INFO] No text in frame")
+            #except Exception as ex:
+            #    print(f"[ERROR] {ex}")
 
-                file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
-    if len(rects) < 4:
-        for indx,rect in enumerate(rects):
-            x0,y0,x1,y1 = rect
-            crop_img = img[x0:x1, y0:y1]
-            crop_img = Image.fromarray(crop_img).convert('L')
-            text = recognizer.process_img(crop_img)
-            if text in mask_word:
-                print(f"[INFO] Processing Frame:{frame_count} content {text}")            
-                file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
-    if len(rects) == 0:
+        file.close()
+        fp1.close()
+        print(f"[INFO] Processing Frame {frame_count} {len(rects)}")
+    except Exception as ex:
         pass
-        #print("[INFO] No text in frame")
-        #except Exception as ex:
-        #    print(f"[ERROR] {ex}")
-
-    file.close()
-    fp1.close()
-    #print(f"[INFO] Processing Frame {frame_count}")
 
 def detect_text_googleVisonApi(path, frame_count):
     with open('mask_word.txt') as fp1: 
@@ -197,10 +207,10 @@ def extract_mask_bbox_info(video_path):
         lower_height = int(4/8*height)
         img = frame[lower_height:height, 0:width]
         
-        #if count % 1 == 0:
+        if count % 1 == 0:
             #print(f"[INFO] Shape of frame {frame.shape}")
-        #crop_list.append([img, count])
-        detect_text_ocrMoran([img, count])
+            crop_list.append([img, count])
+        #detect_text_ocrMoran([img, count])
         #future = executor.submit(detect_text_ocrMoran, (img, count))
         #future = executor.submit(detect_text_ocrMoran, (img, count))
     #with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -213,9 +223,9 @@ def extract_mask_bbox_info(video_path):
     #except Exception as ex:
     #    print(f"[ERROR] {ex}")
 
-    #print(f"[INFO] number of frames to processs {len(crop_list)}")
-    #with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-    #    executor.map(detect_text_ocrMoran, crop_list)                   
+    print(f"[INFO] number of frames to processs {len(crop_list)}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+        executor.map(detect_text_ocrMoran, crop_list)                   
 
     '''    
         if len(crop_list) > 1:
@@ -470,7 +480,7 @@ if __name__ == "__main__":
     file = open('intermediate/temp_0.txt','w')
     file.close()
         
-    playVideo(video_path)
+    #playVideo(video_path)
     
     end = timeit.timeit()
     print(end - start)
