@@ -72,6 +72,8 @@ def detect_text_ocrMoran(info):
     with open('mask_word.txt') as fp1: 
         mask_word = fp1.read() 
     
+    img_name = f'tmp/frame_{frame_count}.jpg'
+    #cv2.imwrite(img_name, img)
     mask_word = mask_word.split("\n")
     file_name = f'intermediate/temp_{frame_count}.txt'
     file = open(file_name,'w')
@@ -88,14 +90,16 @@ def detect_text_ocrMoran(info):
         for indx,rect in enumerate(rects):
             x0,y0,x1,y1 = rect
             crop_img = img[x0:x1, y0:y1]
-            #crop_img = img[y0:y1, x0:x1, :]
-            #gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
             crop_img = Image.fromarray(crop_img).convert('L')
             crop_img_list.append(crop_img)
         text_list = recognizer.process_img_list(crop_img_list)
-        for text in text_list:
+        #print(f"[INFO] Content of frame:{frame_count} {text_list}")
+        for word_index, text in enumerate(text_list):
             if text in mask_word:
-                print(f"[INFO] Processing Frame content {text}")            
+                rect = rects[word_index]
+                x0,y0,x1,y1 = rect
+                print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
+
                 file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
     if len(rects) < 4:
         for indx,rect in enumerate(rects):
@@ -104,16 +108,17 @@ def detect_text_ocrMoran(info):
             crop_img = Image.fromarray(crop_img).convert('L')
             text = recognizer.process_img(crop_img)
             if text in mask_word:
-                print(f"[INFO] Processing Frame content {text}")            
+                print(f"[INFO] Processing Frame:{frame_count} content {text}")            
                 file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
     if len(rects) == 0:
-        print("[INFO] No text in frame")
+        pass
+        #print("[INFO] No text in frame")
         #except Exception as ex:
         #    print(f"[ERROR] {ex}")
 
     file.close()
     fp1.close()
-    print(f"[INFO] Processing Frame {frame_count}")
+    #print(f"[INFO] Processing Frame {frame_count}")
 
 def detect_text_googleVisonApi(path, frame_count):
     with open('mask_word.txt') as fp1: 
@@ -192,10 +197,10 @@ def extract_mask_bbox_info(video_path):
         lower_height = int(4/8*height)
         img = frame[lower_height:height, 0:width]
         
-        if count % 1 == 0:
+        #if count % 1 == 0:
             #print(f"[INFO] Shape of frame {frame.shape}")
-            crop_list.append([img, count])
-        #detect_text_ocrMoran([img, count])
+        #crop_list.append([img, count])
+        detect_text_ocrMoran([img, count])
         #future = executor.submit(detect_text_ocrMoran, (img, count))
         #future = executor.submit(detect_text_ocrMoran, (img, count))
     #with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -208,9 +213,9 @@ def extract_mask_bbox_info(video_path):
     #except Exception as ex:
     #    print(f"[ERROR] {ex}")
 
-    print(f"[INFO] number of frames to processs {len(crop_list)}")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=80) as executor:
-        executor.map(detect_text_ocrMoran, crop_list)                   
+    #print(f"[INFO] number of frames to processs {len(crop_list)}")
+    #with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+    #    executor.map(detect_text_ocrMoran, crop_list)                   
 
     '''    
         if len(crop_list) > 1:

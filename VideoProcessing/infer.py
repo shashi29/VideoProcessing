@@ -489,9 +489,36 @@ class bilstm_infer():
         return pred_list
 
 if __name__ == "__main__":
-    folder_path = "demo_image"
-    BI = bilstm_infer()
+    from src.detector import Detector
+    
+    detector = Detector()
+    detector.load()
+
+    recognizer = bilstm_infer()
+
     #print(BI.process())
-    imgPath = "tmp/0_.jpg"
-    img = Image.open(imgPath).convert('L')
-    print(BI.process_img(img))
+    #imgPath = "tmp/0_.jpg"
+    #img = Image.open(imgPath).convert('L')
+    #print(BI.process_img(img))
+
+    imgPath = "tmp/frame_5000.jpg"
+    img = cv2.imread(imgPath)
+    crop_imgs,boxes,_,_ = detector.process(img)
+    rects = list()
+    for box in boxes:
+        poly = np.array(box).astype(np.int32)
+        y0, x0 = np.min(poly, axis=0)
+        y1, x1 = np.max(poly, axis=0)
+        rects.append([x0, y0, x1, y1])
+
+    crop_img_list = list()
+    if len(rects) > 4:
+        for indx,rect in enumerate(rects):
+            x0,y0,x1,y1 = rect
+            crop_img = img[x0:x1, y0:y1]
+            crop_img = Image.fromarray(crop_img).convert('L')
+            crop_img_list.append(crop_img)
+            file_name = f"tmp2/frame_{indx}.jpg"
+            crop_img.save(file_name)
+        text_list = recognizer.process_img_list(crop_img_list)
+        print(text_list)
