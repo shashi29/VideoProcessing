@@ -83,22 +83,31 @@ def detect_text_ocrMoran(info):
         y1, x1 = np.max(poly, axis=0)
         rects.append([x0, y0, x1, y1])
 
-    for indx,rect in enumerate(rects):
-        #try:
-        x0,y0,x1,y1 = rect
-        crop_img = img[x0:x1, y0:y1]
-        #crop_img = img[y0:y1, x0:x1, :]
-        #gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
-        for i in range(10):
-            file_name = f'tmp/{i}_.jpg'
-            cv2.imwrite(file_name, crop_img)
-        text = recognizer.process()
-        print(text)
-
-        if text in mask_word:
-            print(f"[INFO] Processing Frame content {text}")
-            
-            file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+    crop_img_list = list()
+    if len(rects) > 4:
+        for indx,rect in enumerate(rects):
+            x0,y0,x1,y1 = rect
+            crop_img = img[x0:x1, y0:y1]
+            #crop_img = img[y0:y1, x0:x1, :]
+            #gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
+            crop_img = Image.fromarray(crop_img).convert('L')
+            crop_img_list.append(crop_img)
+        text_list = recognizer.process_img_list(crop_img_list)
+        for text in text_list:
+            if text in mask_word:
+                print(f"[INFO] Processing Frame content {text}")            
+                file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+    if len(rects) < 4:
+        for indx,rect in enumerate(rects):
+            x0,y0,x1,y1 = rect
+            crop_img = img[x0:x1, y0:y1]
+            crop_img = Image.fromarray(crop_img).convert('L')
+            text = recognizer.process_img(crop_img)
+            if text in mask_word:
+                print(f"[INFO] Processing Frame content {text}")            
+                file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+    if len(rects) == 0:
+        print("[INFO] No text in frame")
         #except Exception as ex:
         #    print(f"[ERROR] {ex}")
 
@@ -186,7 +195,7 @@ def extract_mask_bbox_info(video_path):
         if count % 1 == 0:
             #print(f"[INFO] Shape of frame {frame.shape}")
             crop_list.append([img, count])
-            #detect_text_ocrMoran([img, count])
+        #detect_text_ocrMoran([img, count])
         #future = executor.submit(detect_text_ocrMoran, (img, count))
         #future = executor.submit(detect_text_ocrMoran, (img, count))
     #with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -200,7 +209,7 @@ def extract_mask_bbox_info(video_path):
     #    print(f"[ERROR] {ex}")
 
     print(f"[INFO] number of frames to processs {len(crop_list)}")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=80) as executor:
         executor.map(detect_text_ocrMoran, crop_list)                   
 
     '''    
@@ -435,6 +444,8 @@ def process_audio(audio_path, beep_path, df):
     return mask_audio
 
 if __name__ == "__main__":
+    import timeit
+    start = timeit.timeit()
 
     video_path = "test1.mp4"
     audio_path = "audio.wav"
@@ -456,6 +467,8 @@ if __name__ == "__main__":
         
     playVideo(video_path)
     
+    end = timeit.timeit()
+    print(end - start)
     '''
     channels, bit_rate, sample_rate = video_info(video_path)
     blob_name = video_to_audio(video_path, audio_path, channels, bit_rate, sample_rate)

@@ -284,7 +284,6 @@ class config:
     hidden_size = 256
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     batch_size = 192
-    image_folder = 'tmp/'
 
 class ResizeNormalize(object):
     def __init__(self, size, interpolation=Image.BICUBIC):
@@ -429,12 +428,70 @@ class bilstm_infer():
                     confidence_score = pred_max_prob.cumprod(dim=0)[-1]
 
                     #print(f'{img_name:25s}\t{pred:25s}\t{confidence_score:0.4f}')
-        files = glob.glob(f'{self.opt.image_folder}/*')
-        for f in files:
-            os.remove(f)
+        #files = glob.glob(f'{self.opt.image_folder}/*')
+        #for f in files:
+        #    os.remove(f)
         return pred
+
+    def process_img(self, img):
+        #Convert img into tensor
+        transform = ResizeNormalize((self.opt.imgW, self.opt.imgH))
+        images = list()
+        for _ in range(3):
+            images.append(img)
+        image_tensors = [transform(image) for image in images]
+        image_tensors = torch.cat([t.unsqueeze(0) for t in image_tensors], 0)
+        batch_size = image_tensors.size(0)
+        image = image_tensors.to(device)
+        #self.opt.batch_max_length = 0
+        # For max length prediction
+        length_for_pred = torch.IntTensor([self.opt.batch_max_length] * batch_size).to(device)
+        text_for_pred = torch.LongTensor(batch_size, self.opt.batch_max_length + 1).fill_(0).to(device)
+
+        preds = self.model(image, text_for_pred, is_train=False)
+
+        # select max probabilty (greedy decoding) then decode index to character
+        _, preds_index = preds.max(2)
+        preds_str = self.converter.decode(preds_index, length_for_pred)
+        for pred in preds_str:
+            if 'Attn' in self.opt.Prediction:
+                pred_EOS = pred.find('[s]')
+                pred = pred[:pred_EOS]  # prune after "end of sentence" token ([s])
+                break
+        return pred
+
+    def process_img_list(self, images):
+        #Convert img into tensor
+        transform = ResizeNormalize((self.opt.imgW, self.opt.imgH))
+        #images = list()
+        #for _ in range(3):
+        #    images.append(img)
+        image_tensors = [transform(image) for image in images]
+        image_tensors = torch.cat([t.unsqueeze(0) for t in image_tensors], 0)
+        batch_size = image_tensors.size(0)
+        image = image_tensors.to(device)
+        # For max length prediction
+        length_for_pred = torch.IntTensor([self.opt.batch_max_length] * batch_size).to(device)
+        text_for_pred = torch.LongTensor(batch_size, self.opt.batch_max_length + 1).fill_(0).to(device)
+
+        preds = self.model(image, text_for_pred, is_train=False)
+
+        # select max probabilty (greedy decoding) then decode index to character
+        _, preds_index = preds.max(2)
+        preds_str = self.converter.decode(preds_index, length_for_pred)
+
+        pred_list = list()
+        for pred in preds_str:
+            if 'Attn' in self.opt.Prediction:
+                pred_EOS = pred.find('[s]')
+                pred = pred[:pred_EOS]  # prune after "end of sentence" token ([s])
+                pred_list.append(pred)
+        return pred_list
 
 if __name__ == "__main__":
     folder_path = "demo_image"
     BI = bilstm_infer()
-    print(BI.process())
+    #print(BI.process())
+    imgPath = "tmp/0_.jpg"
+    img = Image.open(imgPath).convert('L')
+    print(BI.process_img(img))
