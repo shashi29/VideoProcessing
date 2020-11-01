@@ -63,7 +63,7 @@ detector = Detector()
 detector.load()
 
 recognizer = bilstm_infer()
-
+bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','=','"',':',';','/','\\','|','<','>']
 #@ray.remote
 #def detect_text_ocrMoran(img , frame_count):
 def detect_text_ocrMoran(info):
@@ -94,14 +94,16 @@ def detect_text_ocrMoran(info):
                 crop_img = Image.fromarray(crop_img).convert('L')
                 crop_img_list.append(crop_img)
             text_list = recognizer.process_img_list(crop_img_list)
-            text_list = clean_text(text_list)
+            #text_list = clean_text(text_list)
             #print(f"[INFO] Content of frame:{frame_count} {text_list}")
             for word_index, text in enumerate(text_list):
+                text = text.lower()
+                text = ''.join((filter(lambda i: i not in bad_chars, text)))
                 if text in mask_word:
                     rect = rects[word_index]
                     x0,y0,x1,y1 = rect
                     print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
-                    img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)
+                    #img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)
                     file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
         if len(rects) < 4:
             for indx,rect in enumerate(rects):
@@ -109,20 +111,16 @@ def detect_text_ocrMoran(info):
                 crop_img = img[x0:x1, y0:y1]
                 crop_img = Image.fromarray(crop_img).convert('L')
                 text = recognizer.process_img(crop_img)
-                newText = [text]
-                newText = clean_text(newText)
-                text = newText[0]
+                text = text.lower()
+                text = ''.join((filter(lambda i: i not in bad_chars, text)))
                 if text in mask_word:
                     #print(f"[INFO] Processing Frame:{frame_count} content {text}")
-                    img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)            
+                    #img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)            
                     file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
-        file_name = f"tmp/{frame_count}.jpg"
+        #file_name = f"tmp/{frame_count}.jpg"
         cv2.imwrite(file_name, img)
         if len(rects) == 0:
             pass
-            #print("[INFO] No text in frame")
-            #except Exception as ex:
-            #    print(f"[ERROR] {ex}")
 
         file.close()
         fp1.close()
@@ -224,7 +222,7 @@ def extract_mask_bbox_info(video_path):
     #    print(f"[ERROR] {ex}")
 
     print(f"[INFO] number of frames to processs {len(crop_list)}")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         executor.map(detect_text_ocrMoran, crop_list)                   
 
     '''    

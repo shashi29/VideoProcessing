@@ -51,6 +51,7 @@ def index():
                 print("[INFO] writing mask word")
                 for word in maskText:
                     word = word.strip()
+                    word = word.lower()
                     print(f"[INFO] {word}")
                     word = word + '\n'
                     writer.write(word)
@@ -194,8 +195,9 @@ def ocrVideo():
             with open('mask_word.txt', 'w') as writer:
                 print("[INFO] writing mask word")
                 for word in maskText:
-                    print(f"[INFO] {word}")
                     word = word.strip()
+                    print(f"[INFO] {word}")
+                    word = word.lower()
                     word = word + '\n'
                     writer.write(word)
             

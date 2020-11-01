@@ -501,7 +501,9 @@ if __name__ == "__main__":
     #img = Image.open(imgPath).convert('L')
     #print(BI.process_img(img))
 
-    imgPath = "tmp/frame_5000.jpg"
+    bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','=']
+
+    imgPath = "tmp/680.jpg"
     img = cv2.imread(imgPath)
     crop_imgs,boxes,_,_ = detector.process(img)
     rects = list()
@@ -512,13 +514,28 @@ if __name__ == "__main__":
         rects.append([x0, y0, x1, y1])
 
     crop_img_list = list()
+    print(len(rects))
     if len(rects) > 4:
         for indx,rect in enumerate(rects):
             x0,y0,x1,y1 = rect
             crop_img = img[x0:x1, y0:y1]
             crop_img = Image.fromarray(crop_img).convert('L')
             crop_img_list.append(crop_img)
-            file_name = f"tmp2/frame_{indx}.jpg"
-            crop_img.save(file_name)
+            #file_name = f"tmp2/frame_{indx}.jpg"
+            #crop_img.save(file_name)
         text_list = recognizer.process_img_list(crop_img_list)
         print(text_list)
+        for text in text_list:
+            text = text.lower()
+            text = ''.join((filter(lambda i: i not in bad_chars, text)))
+            print(text)
+    else:
+        for indx,rect in enumerate(rects):
+            x0,y0,x1,y1 = rect
+            crop_img = img[x0:x1, y0:y1]
+            crop_img = Image.fromarray(crop_img).convert('L')
+            text = recognizer.process_img(crop_img)
+            #newText = [text]
+            #newText = clean_text(newText)
+            #text = newText[0]
+            print(text)
