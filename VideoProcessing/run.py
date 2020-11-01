@@ -43,7 +43,6 @@ import re
 
 #Custom text detector
 from src.detector import Detector
-from src.recognizer import Recognizer
 import sys
 from shutil import rmtree
 import concurrent.futures
@@ -65,6 +64,11 @@ detector.load()
 recognizer = bilstm_infer()
 bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','=','"',':',';','/','\\','|','<','>']
 #@ray.remote
+
+class config:
+    worker = 8
+
+
 #def detect_text_ocrMoran(img , frame_count):
 def detect_text_ocrMoran(info):
     try:
@@ -222,7 +226,7 @@ def extract_mask_bbox_info(video_path):
     #    print(f"[ERROR] {ex}")
 
     print(f"[INFO] number of frames to processs {len(crop_list)}")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=config.worker) as executor:
         executor.map(detect_text_ocrMoran, crop_list)                   
 
     '''    
@@ -460,7 +464,7 @@ if __name__ == "__main__":
     import timeit
     start = timeit.timeit()
 
-    video_path = "test1.mp4"
+    video_path = "test4.mp4"
     audio_path = "audio.wav"
     beep_path = "beep.wav"
     BUCKET_NAME = "audio_2020"

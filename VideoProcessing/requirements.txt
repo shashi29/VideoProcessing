@@ -7,3 +7,10 @@ google-cloud-vision==1.0.0
 pytube3
 pydub
 srt
+gdown
+opencv-python
+ffpyplayer
+gensim
+pillow
+scikit-image
+natsort

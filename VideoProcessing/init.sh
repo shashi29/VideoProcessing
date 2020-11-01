@@ -1,6 +1,7 @@
-sudo apt install gcc
-sudo apt install ffmpeg
- 
+sudo apt install -y gcc
+sudo apt install -y ffmpeg
+conda install -y pytorch==1.6.0 torchvision==0.7.0 cudatoolkit=10.1 -c pytorch
+
 #!bin/sh
 
 DATASET_FOLDER="data"
@@ -78,9 +79,13 @@ cd ..
 echo
 
 # INSTALL PIP REQUIREMENTS
-echo "---------- INSTALL PIP REQUIREMENTS -----------"
-python3 -m pip install --user -r requirements.txt
-echo
+#echo "---------- INSTALL PIP REQUIREMENTS -----------"
+#python3 -m pip install --user -r requirements.txt
+#echo
+
+echo "---------- DOWNLOAD RESNET BILSTM MODEL ------------------"
+gdown https://drive.google.com/uc?id=1xbCQZDhY6ltADSVUw1-9uYjqKI0jO4Ga
 
 echo "READY!"
 echo
+
