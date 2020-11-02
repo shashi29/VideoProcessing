@@ -66,7 +66,7 @@ bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','='
 #@ray.remote
 
 class config:
-    worker = 8
+    worker = 12
 
 
 #def detect_text_ocrMoran(img , frame_count):
@@ -118,13 +118,13 @@ def detect_text_ocrMoran(info):
                 text = text.lower()
                 text = ''.join((filter(lambda i: i not in bad_chars, text)))
                 if text in mask_word:
-                    #print(f"[INFO] Processing Frame:{frame_count} content {text}")
+                    print(f"[INFO] Processing Frame:{frame_count} content {text}")
                     #img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)            
                     file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
         #file_name = f"tmp/{frame_count}.jpg"
-        cv2.imwrite(file_name, img)
-        if len(rects) == 0:
-            pass
+        #cv2.imwrite(file_name, img)
+        #if len(rects) == 0:
+        #    pass
 
         file.close()
         fp1.close()
