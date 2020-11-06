@@ -66,7 +66,103 @@ bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','='
 #@ray.remote
 
 class config:
-    worker = 12
+    worker = 36
+
+def isOnSameLine(boxOne, boxTwo):
+    boxOneStartY = boxOne[0,1]
+    boxOneEndY = boxOne[2,1]
+    boxTwoStartY = boxTwo[0,1]
+    boxTwoEndY = boxTwo[2,1]
+    if((boxTwoStartY <= boxOneEndY and boxTwoStartY >= boxOneStartY)
+    or(boxTwoEndY <= boxOneEndY and boxTwoEndY >= boxOneStartY)
+    or(boxTwoEndY >= boxOneEndY and boxTwoStartY <= boxOneStartY)):
+        return True
+    else:
+        return False
+
+def segmentLines(box_group):
+    # sort by highest starty value (bottom left corner of box - [startX,startY], [endX,startY], [endX,endY], [startX, endY])
+    box_group = box_group[np.argsort(box_group[:, 0, 1])]
+
+    lined_box_group = np.zeros(box_group.shape)
+    sorted_box_group = np.zeros(box_group.shape)
+
+    # list of indexes
+    temp = []
+    i = 0
+
+    # check if there is more than one box in the box_group
+    if len(box_group) > 1:
+        while i < len(box_group):
+            for j in range(i + 1, len(box_group)):
+                if(isOnSameLine(box_group[i],box_group[j])):
+                    #print(str(i) + " and " + str(j) + " on same line")
+                    if i not in temp:
+                        temp.append(i)
+                    if j not in temp:
+                        temp.append(j)
+                #else:
+                    #print(str(i) + " and " + str(j) + " not on same line")
+            # append temp with i if the current box (i) is not on the same line with any other box
+            if len(temp) == 0:
+                temp.append(i)
+            
+            # put boxes on same line into lined_box_group array
+            lined_box_group = box_group[np.array(temp)]
+            # sort boxes by startX value
+            lined_box_group = lined_box_group[np.argsort(lined_box_group[:, 0, 0])]
+            # copy sorted boxes on same line into sorted_box_group
+            sorted_box_group[i:temp[-1]+1] = lined_box_group
+            
+            # skip to the index of the box that is not on the same line
+            i = temp[-1] + 1
+            # clear list of indexes
+            temp = []
+    else:
+        # since there is only one box in the boxgroup do nothing but copying the box
+        # print("only one box in boxgroup")
+        sorted_box_group = box_group
+        
+    return sorted_box_group
+
+def createMaskdf(rects, text_list):
+    xmin = list()
+    ymin = list()
+    xmax = list()
+    ymax = list()
+    height = list()
+    width = list()
+    
+    for indx,rect in enumerate(rects):
+        y0,x0,y1,x1 = rect
+        xmin.append(x0)
+        ymin.append(y0)
+        xmax.append(x1)
+        ymax.append(y1)
+        height.append(y1-y0)
+        width.append(x1-x0)
+        
+    df = pd.DataFrame()
+    df['xmin'] = xmin
+    df['ymin'] = ymin
+    df['xmax'] = xmax
+    df['ymax'] = ymax
+    df['word'] = text_list
+    df['height'] = height
+    df['width'] = width
+    
+    word = df['word']
+    word = word.to_list()
+    word = clean_text(word)
+    removetable = str.maketrans('', '', '.,')
+    word =  [s.translate(removetable) for s in word]
+    df['word'] = word
+        
+    #Re order the column name as per the order
+    df = df[['word', 'xmin','ymin','xmax','ymax','height','width']]
+    newdf = addMuteFlag(df)
+
+    return newdf
 
 
 #def detect_text_ocrMoran(img , frame_count):
@@ -77,14 +173,14 @@ def detect_text_ocrMoran(info):
         with open('mask_word.txt') as fp1: 
             mask_word = fp1.read() 
         
-        img_name = f'tmp/frame_{frame_count}.jpg'
-        #cv2.imwrite(img_name, img)
         mask_word = mask_word.split("\n")
         file_name = f'intermediate/temp_{frame_count}.txt'
         file = open(file_name,'w')
         crop_imgs,boxes,_,_ = detector.process(img)
         rects = list()
-        for box in boxes:
+        #Sort the boxes
+        sorted_boxes = segmentLines(boxes)
+        for box in sorted_boxes:
             poly = np.array(box).astype(np.int32)
             y0, x0 = np.min(poly, axis=0)
             y1, x1 = np.max(poly, axis=0)
@@ -98,17 +194,17 @@ def detect_text_ocrMoran(info):
                 crop_img = Image.fromarray(crop_img).convert('L')
                 crop_img_list.append(crop_img)
             text_list = recognizer.process_img_list(crop_img_list)
-            #text_list = clean_text(text_list)
-            #print(f"[INFO] Content of frame:{frame_count} {text_list}")
-            for word_index, text in enumerate(text_list):
-                text = text.lower()
-                text = ''.join((filter(lambda i: i not in bad_chars, text)))
-                if text in mask_word:
-                    rect = rects[word_index]
-                    x0,y0,x1,y1 = rect
+            df = createMaskdf(rects, text_list)
+            for index, row in df.iterrows(): 
+                x0 = row['xmin']
+                y1 = row['ymin']
+                x2 = row['xmax']
+                y2 = row['ymax']
+                text = row['word']
+                if row['muteFlag'] == 1:
                     print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
-                    #img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)
-                    file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
+                    file.write(f'{int(x0)} {int(y0)} {int(x1)} {int(y1)}\n')
+
         if len(rects) < 4:
             for indx,rect in enumerate(rects):
                 x0,y0,x1,y1 = rect
@@ -119,12 +215,7 @@ def detect_text_ocrMoran(info):
                 text = ''.join((filter(lambda i: i not in bad_chars, text)))
                 if text in mask_word:
                     print(f"[INFO] Processing Frame:{frame_count} content {text}")
-                    #img = cv2.rectangle(img, (y0,x0),(y1,x1),(0,0,255),2)            
-                    file.write(f'{int(y0)} {int(x0)} {int(y1)} {int(x1)}\n')
-        #file_name = f"tmp/{frame_count}.jpg"
-        #cv2.imwrite(file_name, img)
-        #if len(rects) == 0:
-        #    pass
+                    file.write(f'{int(x0)} {int(y0)} {int(x1)} {int(y1)}\n')
 
         file.close()
         fp1.close()
@@ -210,38 +301,12 @@ def extract_mask_bbox_info(video_path):
         img = frame[lower_height:height, 0:width]
         
         if count % 1 == 0:
-            #print(f"[INFO] Shape of frame {frame.shape}")
             crop_list.append([img, count])
-        #detect_text_ocrMoran([img, count])
-        #future = executor.submit(detect_text_ocrMoran, (img, count))
-        #future = executor.submit(detect_text_ocrMoran, (img, count))
-    #with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-    #    executor.map(detect_text_ocrMoran, crop_list)
-        #detect_text_ocrMoran(img, count)
-
-    #try:
-    #    for info1,info2 in zip(crop_list[0::2], crop_list[1::2]):
-    #        ray.get([detect_text_ocrMoran.remote(info1[0], info1[1]), detect_text_ocrMoran.remote(info2[0],info2[1])])
-    #except Exception as ex:
-    #    print(f"[ERROR] {ex}")
 
     print(f"[INFO] number of frames to processs {len(crop_list)}")
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.worker) as executor:
         executor.map(detect_text_ocrMoran, crop_list)                   
 
-    '''    
-        if len(crop_list) > 1:
-            prev_frame = crop_list[-1]
-            prev_img = prev_frame[lower_height:height,0:width]
-            boxA, crop_imgA = find_text_region_crop(img)
-            boxB, crop_imgB = find_text_region_crop(prev_img)            
-            iou = bb_intersection_over_union(boxA, boxB)
-            if iou < 1.0:
-                th = threading.Thread(target = detect_text_googleVisonApi, args=(img, count, ))
-                th.daemon = True
-                th.start()
-        crop_list.append(frame)
-    '''
 
 def playVideo(video_path):
     video_name = os.path.basename(video_path)
