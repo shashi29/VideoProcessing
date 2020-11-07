@@ -62,11 +62,12 @@ detector = Detector()
 detector.load()
 
 recognizer = bilstm_infer()
-bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','=','"',':',';','/','\\','|','<','>']
+bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','=','"',':',';','/','\\','|','<','>',]
 #@ray.remote
 
 class config:
-    worker = 36
+    worker = 12
+    skip_frame = 5
 
 def isOnSameLine(boxOne, boxTwo):
     boxOneStartY = boxOne[0,1]
@@ -154,7 +155,7 @@ def createMaskdf(rects, text_list):
     word = df['word']
     word = word.to_list()
     word = clean_text(word)
-    removetable = str.maketrans('', '', '.,')
+    removetable = str.maketrans('', '', '.,!@#$%^&*()_-+={[]}<>/?"'':\\|')
     word =  [s.translate(removetable) for s in word]
     df['word'] = word
         
@@ -197,29 +198,37 @@ def detect_text_ocrMoran(info):
             df = createMaskdf(rects, text_list)
             for index, row in df.iterrows(): 
                 x0 = row['xmin']
-                y1 = row['ymin']
-                x2 = row['xmax']
-                y2 = row['ymax']
+                y0 = row['ymin']
+                x1 = row['xmax']
+                y1 = row['ymax']
                 text = row['word']
                 if row['muteFlag'] == 1:
-                    print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
+                    #print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
                     file.write(f'{int(x0)} {int(y0)} {int(x1)} {int(y1)}\n')
 
         if len(rects) < 4:
+            text_list = list()
             for indx,rect in enumerate(rects):
                 x0,y0,x1,y1 = rect
                 crop_img = img[x0:x1, y0:y1]
                 crop_img = Image.fromarray(crop_img).convert('L')
                 text = recognizer.process_img(crop_img)
-                text = text.lower()
-                text = ''.join((filter(lambda i: i not in bad_chars, text)))
-                if text in mask_word:
-                    print(f"[INFO] Processing Frame:{frame_count} content {text}")
+                text_list.append(text)
+
+            df = createMaskdf(rects, text_list)
+            for index, row in df.iterrows():
+                x0 = row['xmin']
+                y0 = row['ymin']
+                x1 = row['xmax']
+                y1 = row['ymax']
+                text = row['word']
+                if row['muteFlag'] == 1:
+                    #print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
                     file.write(f'{int(x0)} {int(y0)} {int(x1)} {int(y1)}\n')
 
         file.close()
         fp1.close()
-        print(f"[INFO] Processing Frame {frame_count} {len(rects)}")
+        #print(f"[INFO] Processing Frame {frame_count} {len(rects)}")
     except Exception as ex:
         pass
 
@@ -285,7 +294,10 @@ def find_text_region_crop(img):
     return [x,y,x+w,y+h],crop_img
 
 
-def extract_mask_bbox_info(video_path): 
+def extract_mask_bbox_info(video_path):
+    for temp_files in glob.glob("intermediate/*"):
+        os.remove(temp_files)
+
     video=cv2.VideoCapture(video_path)
     count = 0
     crop_list = list()
@@ -300,7 +312,7 @@ def extract_mask_bbox_info(video_path):
         lower_height = int(4/8*height)
         img = frame[lower_height:height, 0:width]
         
-        if count % 1 == 0:
+        if count % config.skip_frame == 0:
             crop_list.append([img, count])
 
     print(f"[INFO] number of frames to processs {len(crop_list)}")
@@ -348,7 +360,7 @@ def playVideo(video_path):
             if len(mask_word_box) > 0:
                 for bb_mask in mask_word_box:
                     bb_mask = bb_mask.split(" ")
-                    cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+Offset),(int(bb_mask[2]),int(bb_mask[3])+Offset),(0,0,255),-1)
+                    cv2.rectangle(frame,(int(bb_mask[0]),int(bb_mask[1])+Offset),(int(bb_mask[2]),int(bb_mask[3])+Offset),(0,0,255),5)
             fp1.close()
 
         if os.path.isfile(file_name) == False:
@@ -430,7 +442,7 @@ def word_timestamp(response, cleanText=True):
         word = df['word']
         word = word.to_list()
         word = clean_text(word)
-        removetable = str.maketrans('', '', '.,')
+        removetable = str.maketrans('', '', '.,`~!@#$%^&*()-_+=[{}]\\|:;"<>/?''')
         word =  [s.translate(removetable) for s in word]
         df['word'] = word
         
@@ -458,7 +470,7 @@ def addMuteFlag(new_df):
                             for indx,j in enumerate(range(i+mapIndex+1, i+len(wordGroup.split(" ")))):
                                 indx = indx + 1
                                 if word_split_freq[indx] == new_df.iloc[j, 0]:
-                                    print(indx, new_df.iloc[i, 0], new_df.iloc[j, 0])
+                                    #print(indx, new_df.iloc[i, 0], new_df.iloc[j, 0])
                                     if indx == len(word_split_freq)-1:
                                         for c_indx in range(len(word_split_freq)):
                                             info_dic[idx+c_indx] = 1
@@ -496,7 +508,7 @@ def process_audio(audio_path, beep_path, df):
 
     bad_word = mask_word.split("\n")
     mask_audio = AudioSegment.empty()
-    print(f"[INFO] processing the audio and removing words: {bad_word}")
+    #print(f"[INFO] processing the audio and removing words: {bad_word}")
     for index, row in df.iterrows():
         try:
             word = row['word']
@@ -508,12 +520,12 @@ def process_audio(audio_path, beep_path, df):
             #word = word.islower()
             #if word in bad_word and muteFlag == 1:
             if muteFlag == 1 or word in bad_word:
-                print(f"[INFO] {word} {word_start_time} {word_end_time}")                
+                #print(f"[INFO] {word} {word_start_time} {word_end_time}")                
                 mask_audio_word, flag = create_mask_audio(word_duration, beep_audio) 
                 #mask_audio_word = AudioSegment.silent(duration = word_duration)
                 mask_audio += mask_audio_word
                 if flag == 1:
-                    print(f"[INFO] longer audio ---> {word} {word_start_time} {word_end_time}")
+                    #print(f"[INFO] longer audio ---> {word} {word_start_time} {word_end_time}")
                     threshold = 400
                     mask_audio += audio[word_start_time + threshold : word_end_time]
             else:
