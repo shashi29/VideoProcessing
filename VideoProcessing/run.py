@@ -48,6 +48,8 @@ from shutil import rmtree
 import concurrent.futures
 from multiprocessing import Pool
 from multiprocessing import cpu_count
+from tqdm import tqdm
+
 #import ray
 import torch
 #torch.set_num_threads(os.cpu_count())
@@ -66,8 +68,8 @@ bad_chars = [',','.','?','!','@','#','$','%','^','&','*','(',')','-','_','+','='
 #@ray.remote
 
 class config:
-    worker = 12
-    skip_frame = 5
+    worker = 55
+    skip_frame = 1
 
 def isOnSameLine(boxOne, boxTwo):
     boxOneStartY = boxOne[0,1]
@@ -160,11 +162,27 @@ def createMaskdf(rects, text_list):
     df['word'] = word
         
     #Re order the column name as per the order
+    df = break_word_mask_update_df(df)
+
     df = df[['word', 'xmin','ymin','xmax','ymax','height','width']]
     newdf = addMuteFlag(df)
 
     return newdf
 
+def break_word_mask_update_df(df):
+    updateList = list()
+    for index, row in df.iterrows():
+        if len(row['word'].split(" ")) > 1:
+            for singleWord in row['word'].split(" "):
+                value = [singleWord, row['xmin'], row['ymin'], row['xmax'], row['ymax'], row['height'], row['width']]
+                updateList.append(value)
+        else:
+            value = [row['word'], row['xmin'], row['ymin'], row['xmax'], row['ymax'], row['height'], row['width']]
+            updateList.append(value)
+
+    column_name = ['word', 'xmin','ymin','xmax','ymax','height','width']
+    newdf = pd.DataFrame(updateList, columns=column_name)
+    return newdf
 
 #def detect_text_ocrMoran(img , frame_count):
 def detect_text_ocrMoran(info):
@@ -177,6 +195,8 @@ def detect_text_ocrMoran(info):
         mask_word = mask_word.split("\n")
         file_name = f'intermediate/temp_{frame_count}.txt'
         file = open(file_name,'w')
+
+        ocrFile = open('frame_ocr.csv','a')
         crop_imgs,boxes,_,_ = detector.process(img)
         rects = list()
         #Sort the boxes
@@ -205,6 +225,8 @@ def detect_text_ocrMoran(info):
                 if row['muteFlag'] == 1:
                     #print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
                     file.write(f'{int(x0)} {int(y0)} {int(x1)} {int(y1)}\n')
+            frameText = " ".join(text_list)
+            ocrFile.write(f'{int(frame_count)} , {frameText} \n')
 
         if len(rects) < 4:
             text_list = list()
@@ -214,7 +236,6 @@ def detect_text_ocrMoran(info):
                 crop_img = Image.fromarray(crop_img).convert('L')
                 text = recognizer.process_img(crop_img)
                 text_list.append(text)
-
             df = createMaskdf(rects, text_list)
             for index, row in df.iterrows():
                 x0 = row['xmin']
@@ -225,10 +246,12 @@ def detect_text_ocrMoran(info):
                 if row['muteFlag'] == 1:
                     #print(f"[INFO] Processing Frame:{frame_count} content {text} {x0} {y0} {x1} {y1}")
                     file.write(f'{int(x0)} {int(y0)} {int(x1)} {int(y1)}\n')
-
+            frameText = " ".join(text_list)
+            ocrFile.write(f'{int(frame_count)} , {frameText} \n')
         file.close()
         fp1.close()
-        #print(f"[INFO] Processing Frame {frame_count} {len(rects)}")
+        ocrFile.close()
+        print(f"[INFO] Processing Frame {frame_count} --> {text_list}")
     except Exception as ex:
         pass
 
@@ -298,6 +321,10 @@ def extract_mask_bbox_info(video_path):
     for temp_files in glob.glob("intermediate/*"):
         os.remove(temp_files)
 
+    #Open a text file to store the video output
+    file = open('frame_ocr.csv','w')
+    file.close()
+
     video=cv2.VideoCapture(video_path)
     count = 0
     crop_list = list()
@@ -317,7 +344,7 @@ def extract_mask_bbox_info(video_path):
 
     print(f"[INFO] number of frames to processs {len(crop_list)}")
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.worker) as executor:
-        executor.map(detect_text_ocrMoran, crop_list)                   
+        tqdm(executor.map(detect_text_ocrMoran, crop_list), total=len(crop_list))                   
 
 
 def playVideo(video_path):
@@ -445,10 +472,32 @@ def word_timestamp(response, cleanText=True):
         removetable = str.maketrans('', '', '.,`~!@#$%^&*()-_+=[{}]\\|:;"<>/?''')
         word =  [s.translate(removetable) for s in word]
         df['word'] = word
+
+    #Post fix to break group of word in single word
+    df = break_word_update_df(df)
         
+    #Add mute flag at word level
     df = addMuteFlag(df)
 
     return df    
+
+def break_word_update_df(df):
+    updateList = list()
+    for index, row in df.iterrows():
+        if len(row['word'].split(" ")) > 1:
+            for singleWord in row['word'].split(" "):
+                value = [singleWord, row['word_start_sec'], row['word_start_nano_sec'], row['word_end_sec'],
+               row['word_end_nano_sec'], row['word_start_time'], row['word_end_time'],row['word_start_time_lag']]
+                updateList.append(value)
+        else:
+            value = [row['word'], row['word_start_sec'], row['word_start_nano_sec'], row['word_end_sec'],
+               row['word_end_nano_sec'], row['word_start_time'], row['word_end_time'],row['word_start_time_lag']]
+            updateList.append(value)
+
+    column_name = ['word', 'word_start_sec', 'word_start_nano_sec', 'word_end_sec',
+           'word_end_nano_sec', 'word_start_time', 'word_end_time','word_start_time_lag']
+    newdf = pd.DataFrame(updateList, columns=column_name)
+    return newdf
 
 def addMuteFlag(new_df):
     with open('mask_word.txt') as fp1: 

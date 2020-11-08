@@ -20,7 +20,7 @@ import os, sys, re, unicodedata
 from gensim.utils import deaccent
 from collections import Counter
 
-verbose = True
+verbose = False
 
 #https://github.com/Ankur3107/nlp_preprocessing/blob/master/nlp_preprocessing/clean.py
 
@@ -225,7 +225,7 @@ def _make_cleaning(s, c_dict):
 def _check_vocab(c_list, vocabulary, response='default'):
     try:
         words = set([w for line in c_list for w in line.split()])
-        print('Total Words :',len(words))
+        #print('Total Words :',len(words))
         u_list = words.difference(set(vocabulary))
         k_list = words.difference(u_list)
     
