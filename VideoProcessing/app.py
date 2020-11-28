@@ -52,6 +52,7 @@ def index():
                 for word in maskText:
                     word = word.strip()
                     word = word.lower()
+                    word = process_word(word)
                     print(f"[INFO] {word}")
                     word = word + '\n'
                     writer.write(word)
@@ -196,8 +197,9 @@ def ocrVideo():
                 print("[INFO] writing mask word")
                 for word in maskText:
                     word = word.strip()
-                    print(f"[INFO] {word}")
                     word = word.lower()
+                    word = process_word(word)
+                    print(f"[INFO] {word}")
                     word = word + '\n'
                     writer.write(word)
             
@@ -217,6 +219,19 @@ def ocrVideo():
             return redirect(url_for('uploaded_file', filename=filename))
 
     return render_template('index.html')
+
+def clean_text(word):
+    word = clean_contractions(word)
+    word = to_lower(word)
+    return word
+
+def process_word(word):
+    word = word.split(" ")
+    word = clean_text(word)
+    removetable = str.maketrans('', '', '.,!@#$%^&*()_-+={[]}<>/?":\\|')
+    word =  [s.translate(removetable) for s in word]
+    word = " ".join(word)
+    return word
 
 def process_ocr_video(video_path, filename):
     for temp_files in glob.glob("intermediate/*"):
